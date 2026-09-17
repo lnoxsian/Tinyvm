@@ -1,0 +1,44 @@
+{{ define "title" }}Virtual Machines - TinyVM{{ end }}
+
+{{ define "content" }}
+<div class="content-header">
+    <h1 class="content-title">Virtual Machines</h1>
+    <a href="/vms/new" class="btn btn-primary">Create VM</a>
+</div>
+
+{{ if .VMs }}
+<div class="vm-grid">
+    {{ range .VMs }}
+    <div class="vm-card">
+        <div class="vm-card-header">
+            <span class="vm-name">{{ .Name }}</span>
+            <span class="badge {{ .StatusClass }}">{{ .Status }}</span>
+        </div>
+        <div class="vm-specs">
+            <div class="vm-spec-item">
+                <span class="vm-spec-label">vCPU</span>
+                <span class="vm-spec-val">{{ .CPUs }}</span>
+            </div>
+            <div class="vm-spec-item">
+                <span class="vm-spec-label">Memory</span>
+                <span class="vm-spec-val">{{ .MemoryMB }} MB</span>
+            </div>
+            <div class="vm-spec-item">
+                <span class="vm-spec-label">Disk</span>
+                <span class="vm-spec-val">{{ .DiskSize }}</span>
+            </div>
+        </div>
+        <div class="vm-actions">
+            <a href="/vms/{{ .ID }}" class="btn btn-sm">Manage</a>
+        </div>
+    </div>
+    {{ end }}
+</div>
+{{ else }}
+<div class="empty-state">
+    <h3>No Virtual Machines Configured</h3>
+    <p>Create a virtual machine to get started.</p>
+    <a href="/vms/new" class="btn btn-primary">Create VM</a>
+</div>
+{{ end }}
+{{ end }}

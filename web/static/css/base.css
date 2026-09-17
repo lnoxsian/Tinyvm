@@ -1,0 +1,75 @@
+:root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-hover: #1c2128;
+    --panel-subtle: #21262d;
+    --border: #30363d;
+    --border-subtle: #21262d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #238636;
+    --accent-hover: #2ea043;
+    --accent-blue: #1f6feb;
+    --accent-blue-hover: #388bfd;
+    --danger: #da3633;
+    --danger-hover: #f85149;
+    --warning: #d29922;
+    --success: #238636;
+    --font-mono: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --header-height: 52px;
+    --sidebar-width: 220px;
+}
+
+[data-theme="light"] {
+    --bg: #f6f8fa;
+    --panel: #ffffff;
+    --panel-hover: #f3f4f6;
+    --panel-subtle: #eaeef2;
+    --border: #d0d7de;
+    --border-subtle: #e1e4e8;
+    --text: #1f2328;
+    --text-muted: #656d76;
+    --accent: #1a7f37;
+    --accent-hover: #2da44e;
+    --accent-blue: #0969da;
+    --accent-blue-hover: #0550ae;
+    --danger: #cf222e;
+    --danger-hover: #a40e26;
+    --warning: #9a6700;
+    --success: #1a7f37;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    height: 100vh;
+    overflow: hidden;
+}
+
+a {
+    color: var(--accent-blue);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+code, pre {
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
