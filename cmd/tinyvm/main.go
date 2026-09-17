@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,9 +27,12 @@ Commands:
   serve       Start the TinyVM web server and REST API (default)
   version     Show TinyVM version and build information
   list        List all virtual machines
+  create      Create a new virtual machine
   start       Start a virtual machine
-  stop        Force stop a virtual machine
   shutdown    Gracefully shut down a virtual machine
+  stop        Force stop a virtual machine
+  restart     Restart a virtual machine
+  delete      Delete a virtual machine and its storage
   status      Show the status of a virtual machine
 
 Flags for 'serve':
@@ -78,32 +83,32 @@ func main() {
 		runList(args[1:])
 		return
 
+	case "create":
+		runCreate(args[1:])
+		return
+
 	case "start":
-		if len(args) < 2 {
-			fmt.Println("Usage: tinyvm start <vm-id>")
-			os.Exit(1)
-		}
-		runStart(args[1])
-		return
-
-	case "stop":
-		if len(args) < 2 {
-			fmt.Println("Usage: tinyvm stop <vm-id>")
-			os.Exit(1)
-		}
-		runStop(args[1])
-		return
-
-	case "status":
-		if len(args) < 2 {
-			fmt.Println("Usage: tinyvm status <vm-id>")
-			os.Exit(1)
-		}
-		runStatus(args[1])
+		runStart(args[1:])
 		return
 
 	case "shutdown":
-		fmt.Println("tinyvm shutdown: QMP graceful ACPI shutdown will be connected in Phase 5. Use 'tinyvm stop' for force stop.")
+		runShutdown(args[1:])
+		return
+
+	case "stop":
+		runStop(args[1:])
+		return
+
+	case "restart":
+		runRestart(args[1:])
+		return
+
+	case "delete":
+		runDelete(args[1:])
+		return
+
+	case "status":
+		runStatus(args[1:])
 		return
 
 	default:
@@ -118,6 +123,33 @@ func main() {
 	}
 }
 
+func parseVMIDAndDataDir(cmdName string, args []string) (string, string) {
+	var vmID string
+	var dataDir string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if (arg == "-data-dir" || arg == "--data-dir") && i+1 < len(args) {
+			dataDir = args[i+1]
+			i++
+		} else if strings.HasPrefix(arg, "-data-dir=") {
+			dataDir = strings.TrimPrefix(arg, "-data-dir=")
+		} else if strings.HasPrefix(arg, "--data-dir=") {
+			dataDir = strings.TrimPrefix(arg, "--data-dir=")
+		} else if strings.HasPrefix(arg, "-") {
+			// ignore other flags
+		} else if vmID == "" {
+			vmID = arg
+		}
+	}
+
+	if vmID == "" {
+		fmt.Fprintf(os.Stderr, "Error: missing VM ID\nUsage: tinyvm %s <vm-id> [-data-dir path]\n", cmdName)
+		os.Exit(1)
+	}
+	return vmID, dataDir
+}
+
 func getManager(args []string) (*vm.Manager, error) {
 	cfg, _, err := config.Load(args)
 	if err != nil {
@@ -129,11 +161,87 @@ func getManager(args []string) (*vm.Manager, error) {
 		return nil, fmt.Errorf("error accessing storage: %w", err)
 	}
 
-	return vm.NewManager(store, nil), nil
+	mgr := vm.NewManager(store, nil)
+	_ = mgr.RecoverAll()
+	return mgr, nil
 }
 
-func runStart(vmID string) {
-	mgr, err := getManager(nil)
+func runCreate(args []string) {
+	fs := flag.NewFlagSet("tinyvm create", flag.ExitOnError)
+	id := fs.String("id", "", "Unique VM identifier (required)")
+	name := fs.String("name", "", "Friendly name for the VM")
+	cpus := fs.Int("cpus", 1, "Number of vCPUs")
+	ram := fs.Int("ram", 1024, "RAM in MB")
+	disk := fs.String("disk", "disk.qcow2", "Disk file name")
+	diskFormat := fs.String("disk-format", "qcow2", "Disk format (qcow2 or raw)")
+	diskSize := fs.String("disk-size", "10G", "Virtual disk size (e.g. 20G, 500M)")
+	iso := fs.String("iso", "", "Optional boot ISO file from storage")
+	sshPort := fs.Int("ssh-port", 0, "Optional host port to forward to guest SSH (port 22)")
+	dataDir := fs.String("data-dir", "", "Custom data directory")
+
+	if err := fs.Parse(args); err != nil {
+		os.Exit(1)
+	}
+
+	if *id == "" {
+		fmt.Fprintln(os.Stderr, "Error: -id is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	vmName := *name
+	if vmName == "" {
+		vmName = *id
+	}
+
+	cfg := vm.VMConfig{
+		ID:         *id,
+		Name:       vmName,
+		CPUs:       *cpus,
+		MemoryMB:   *ram,
+		Disk:       *disk,
+		DiskFormat: *diskFormat,
+		DiskSize:   *diskSize,
+		ISO:        *iso,
+		Network: vm.NetworkConfig{
+			Enabled: true,
+			Mode:    "user",
+			SSHPort: *sshPort,
+		},
+	}
+
+	var mgrArgs []string
+	if *dataDir != "" {
+		mgrArgs = append(mgrArgs, "-data-dir", *dataDir)
+	}
+
+	mgr, err := getManager(mgrArgs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Creating virtual machine '%s' (%s, %d vCPU, %d MB RAM, %s disk)...\n", *id, vmName, *cpus, *ram, *diskSize)
+	createdVM, err := mgr.CreateVM(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Virtual machine '%s' created successfully (state: %s).\n", createdVM.Config.ID, createdVM.Runtime.State)
+}
+
+func getManagerForDir(dataDir string) (*vm.Manager, error) {
+	var args []string
+	if dataDir != "" {
+		args = []string{"-data-dir", dataDir}
+	}
+	return getManager(args)
+}
+
+func runStart(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("start", args)
+	mgr, err := getManagerForDir(dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -149,8 +257,26 @@ func runStart(vmID string) {
 	fmt.Printf("VM '%s' started successfully (PID: %d)\n", vmID, v.Runtime.PID)
 }
 
-func runStop(vmID string) {
-	mgr, err := getManager(nil)
+func runShutdown(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("shutdown", args)
+	mgr, err := getManagerForDir(dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Requesting shutdown for virtual machine '%s'...\n", vmID)
+	if err := mgr.ShutdownVM(vmID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("VM '%s' shut down successfully.\n", vmID)
+}
+
+func runStop(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("stop", args)
+	mgr, err := getManagerForDir(dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -165,33 +291,94 @@ func runStop(vmID string) {
 	fmt.Printf("VM '%s' stopped successfully.\n", vmID)
 }
 
-func runStatus(vmID string) {
-	mgr, err := getManager(nil)
+func runRestart(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("restart", args)
+	mgr, err := getManagerForDir(dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
-	v, err := mgr.GetVM(vmID)
+	fmt.Printf("Restarting virtual machine '%s'...\n", vmID)
+	if err := mgr.RestartVM(vmID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	v, _ := mgr.GetVM(vmID)
+	fmt.Printf("VM '%s' restarted successfully (PID: %d)\n", vmID, v.Runtime.PID)
+}
+
+func runDelete(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("delete", args)
+	mgr, err := getManagerForDir(dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Deleting virtual machine '%s'...\n", vmID)
+	if err := mgr.DeleteVM(vmID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("VM '%s' deleted successfully.\n", vmID)
+}
+
+func runStatus(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("status", args)
+	mgr, err := getManagerForDir(dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	st, err := mgr.StatusVM(vmID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("VM:      %s\n", v.Config.Name)
-	fmt.Printf("ID:      %s\n", v.Config.ID)
-	fmt.Printf("Status:  %s\n", v.Runtime.State)
-	if v.Runtime.PID > 0 {
-		fmt.Printf("PID:     %d\n", v.Runtime.PID)
-		fmt.Printf("Uptime:  %s\n", time.Since(v.Runtime.StartedAt).Round(time.Second))
+	fmt.Printf("VM Name:      %s\n", st.Config.Name)
+	fmt.Printf("VM ID:        %s\n", st.Config.ID)
+	fmt.Printf("Status:       %s\n", st.Runtime.State)
+	if st.Runtime.PID > 0 {
+		fmt.Printf("PID:          %d\n", st.Runtime.PID)
+		fmt.Printf("Uptime:       %s\n", st.Uptime)
 	}
-	fmt.Printf("CPUs:    %d\n", v.Config.CPUs)
-	fmt.Printf("Memory:  %d MB\n", v.Config.MemoryMB)
-	fmt.Printf("Disk:    %s\n", v.Config.Disk)
+	fmt.Printf("vCPUs:        %d\n", st.Config.CPUs)
+	fmt.Printf("Memory:       %d MB\n", st.Config.MemoryMB)
+	fmt.Printf("Disk:         %s (%s, virtual: %s, on-disk: %.2f MB)\n",
+		st.Config.Disk, st.Config.DiskFormat, st.Config.DiskSize, float64(st.DiskActualBytes)/(1024*1024))
+	if st.Config.ISO != "" {
+		fmt.Printf("ISO:          %s\n", st.Config.ISO)
+	}
+	if st.Config.Network.Enabled {
+		portsStr := "None"
+		if st.Config.Network.SSHPort > 0 {
+			portsStr = fmt.Sprintf("host:%d -> guest:22", st.Config.Network.SSHPort)
+		}
+		for _, p := range st.Config.Network.Ports {
+			portsStr += fmt.Sprintf(", host:%d -> guest:%d (%s)", p.Host, p.Guest, p.Protocol)
+		}
+		fmt.Printf("Networking:   enabled (user-mode, %s)\n", portsStr)
+	} else {
+		fmt.Println("Networking:   disabled")
+	}
+	fmt.Printf("Log File:     %s\n", st.LogPath)
+	fmt.Printf("QMP Socket:   %s\n", st.QMPSockPath)
+	fmt.Printf("Console Sock: %s\n", st.ConsoleSockPath)
 }
 
 func runList(args []string) {
-	mgr, err := getManager(args)
+	fs := flag.NewFlagSet("tinyvm list", flag.ExitOnError)
+	dataDir := fs.String("data-dir", "", "Custom data directory")
+	if err := fs.Parse(args); err != nil {
+		os.Exit(1)
+	}
+
+	mgr, err := getManagerForDir(*dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -236,6 +423,9 @@ func runServe(args []string) {
 	}
 
 	vmMgr := vm.NewManager(store, nil)
+	if err := vmMgr.RecoverAll(); err != nil {
+		logger.Warn("Error reconciling VMs on startup", "err", err)
+	}
 
 	srv, err := api.NewServer(cfg, logger, vmMgr)
 	if err != nil {

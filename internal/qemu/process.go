@@ -65,6 +65,9 @@ func StartProcess(binary string, args []string, paths QEMUPaths, vmID string) (*
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
@@ -194,6 +197,18 @@ func (p *Process) Kill() error {
 
 	<-p.exitCh
 	return nil
+}
+
+// Signal sends an OS signal to the running QEMU process.
+func (p *Process) Signal(sig os.Signal) error {
+	p.mu.RLock()
+	if !p.running {
+		p.mu.RUnlock()
+		return ErrProcessNotRunning
+	}
+	p.mu.RUnlock()
+
+	return p.cmd.Process.Signal(sig)
 }
 
 // ExitChan returns a channel that receives the ExitResult when the process terminates.

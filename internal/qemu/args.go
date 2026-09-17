@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"tinyvm/internal/host"
 )
 
 // PortForward configures network port forwarding.
@@ -30,6 +32,7 @@ type Config struct {
 	Disk       string        `json:"disk"`
 	DiskFormat string        `json:"disk_format"`
 	ISO        string        `json:"iso,omitempty"`
+	Firmware   string        `json:"firmware,omitempty"` // "bios" or "uefi"
 	Network    NetworkConfig `json:"network"`
 }
 
@@ -39,6 +42,7 @@ type QEMUPaths struct {
 	ISODir      string
 	DiskPath    string
 	ISOPath     string
+	EFIVars     string
 	QMPSock     string
 	ConsoleSock string
 	PIDFile     string
@@ -61,6 +65,7 @@ func BuildPaths(vmDir string, isoDir string, cfg *Config) QEMUPaths {
 		ISODir:      isoDir,
 		DiskPath:    diskPath,
 		ISOPath:     isoPath,
+		EFIVars:     filepath.Join(vmDir, "efivars.fd"),
 		QMPSock:     filepath.Join(vmDir, "qmp.sock"),
 		ConsoleSock: filepath.Join(vmDir, "console.sock"),
 		PIDFile:     filepath.Join(vmDir, "qemu.pid"),
@@ -85,7 +90,27 @@ func BuildArgs(cfg *Config, paths QEMUPaths, useKVM bool) []string {
 		)
 	}
 
-	// 2. SMP & Memory
+	// 2. Firmware (BIOS or UEFI)
+	if strings.ToLower(cfg.Firmware) == "uefi" {
+		fw := host.DetectUEFIFirmware()
+		if fw.Available {
+			if fw.IsSplit {
+				varsPath := paths.EFIVars
+				if varsPath == "" {
+					varsPath = filepath.Join(paths.VMDir, "efivars.fd")
+				}
+				_ = host.InitEFIVars(paths.VMDir, fw)
+				args = append(args,
+					"-drive", fmt.Sprintf("if=pflash,format=raw,readonly=on,file=%s", fw.CodePath),
+					"-drive", fmt.Sprintf("if=pflash,format=raw,file=%s", varsPath),
+				)
+			} else {
+				args = append(args, "-bios", fw.CodePath)
+			}
+		}
+	}
+
+	// 3. SMP & Memory
 	args = append(args,
 		"-smp", strconv.Itoa(cfg.CPUs),
 		"-m", strconv.Itoa(cfg.MemoryMB),

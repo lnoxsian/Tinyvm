@@ -66,6 +66,7 @@ type VMConfig struct {
 	DiskFormat string        `json:"disk_format"`
 	DiskSize   string        `json:"disk_size,omitempty"`
 	ISO        string        `json:"iso,omitempty"`
+	Firmware   string        `json:"firmware,omitempty"` // "bios" or "uefi"
 	Network    NetworkConfig `json:"network"`
 }
 
@@ -120,6 +121,15 @@ func (c *VMConfig) Validate() error {
 		}
 	}
 
+	if c.Firmware == "" {
+		c.Firmware = "bios"
+	} else {
+		c.Firmware = strings.ToLower(strings.TrimSpace(c.Firmware))
+		if c.Firmware != "bios" && c.Firmware != "uefi" {
+			return errors.New("invalid firmware: must be 'bios' or 'uefi'")
+		}
+	}
+
 	if c.Network.Mode == "" {
 		c.Network.Mode = "user"
 	}
@@ -164,6 +174,7 @@ func (c *VMConfig) ToQEMUConfig() *qemu.Config {
 		Disk:       c.Disk,
 		DiskFormat: c.DiskFormat,
 		ISO:        c.ISO,
+		Firmware:   c.Firmware,
 		Network: qemu.NetworkConfig{
 			Enabled: c.Network.Enabled,
 			Mode:    c.Network.Mode,

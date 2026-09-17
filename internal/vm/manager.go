@@ -24,6 +24,7 @@ type Manager struct {
 	launcher  *qemu.Launcher
 	vms       map[string]*VM
 	processes map[string]*qemu.Process
+	opLocks   map[string]*sync.Mutex
 }
 
 // NewManager creates and initializes a new VM Manager.
@@ -37,9 +38,22 @@ func NewManager(s *storage.Storage, launcher *qemu.Launcher) *Manager {
 		launcher:  launcher,
 		vms:       make(map[string]*VM),
 		processes: make(map[string]*qemu.Process),
+		opLocks:   make(map[string]*sync.Mutex),
 	}
-	_ = m.DiscoverVMs()
+	_ = m.RecoverAll()
 	return m
+}
+
+// GetVMOpLock retrieves or initializes the synchronization lock for a given VM ID.
+func (m *Manager) GetVMOpLock(id string) *sync.Mutex {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	lock, exists := m.opLocks[id]
+	if !exists {
+		lock = &sync.Mutex{}
+		m.opLocks[id] = lock
+	}
+	return lock
 }
 
 // Launcher returns the underlying QEMU launcher.
@@ -93,12 +107,16 @@ func (m *Manager) CreateVM(cfg VMConfig) (*VM, error) {
 		return nil, fmt.Errorf("validation error: %w", err)
 	}
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	opLock := m.GetVMOpLock(cfg.ID)
+	opLock.Lock()
+	defer opLock.Unlock()
 
+	m.mu.Lock()
 	if _, exists := m.vms[cfg.ID]; exists || m.storage.VMExists(cfg.ID) {
+		m.mu.Unlock()
 		return nil, ErrVMAlreadyExists
 	}
+	m.mu.Unlock()
 
 	// 1. Create VM directory and subfolders
 	vmDir, err := m.storage.CreateVMStorage(cfg.ID)
@@ -160,22 +178,29 @@ func (m *Manager) ListVMs() []*VM {
 
 // DeleteVM removes a VM from storage and memory if it is not currently running.
 func (m *Manager) DeleteVM(id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	opLock := m.GetVMOpLock(id)
+	opLock.Lock()
+	defer opLock.Unlock()
 
+	m.mu.Lock()
 	vm, exists := m.vms[id]
 	if !exists {
+		m.mu.Unlock()
 		return ErrVMNotFoundInMgr
 	}
 
-	if vm.Runtime.State == StateRunning || vm.Runtime.State == StateStarting {
+	if vm.Runtime.State == StateRunning || vm.Runtime.State == StateStarting || vm.Runtime.State == StateStopping {
+		m.mu.Unlock()
 		return ErrVMAlreadyRunning
 	}
+	m.mu.Unlock()
 
 	if err := m.storage.DeleteVMStorage(id); err != nil {
 		return fmt.Errorf("failed to delete VM storage: %w", err)
 	}
 
+	m.mu.Lock()
 	delete(m.vms, id)
+	m.mu.Unlock()
 	return nil
 }

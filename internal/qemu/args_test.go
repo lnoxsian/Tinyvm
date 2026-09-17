@@ -139,3 +139,54 @@ func TestBuildArgs_WithISO(t *testing.T) {
 		t.Errorf("expected -boot order=d,menu=on for ISO installation, got %s", boot)
 	}
 }
+
+func TestBuildArgs_WithUEFI(t *testing.T) {
+	cfg := &Config{
+		ID:       "uefi-vm",
+		CPUs:     2,
+		MemoryMB: 2048,
+		Firmware: "uefi",
+	}
+
+	paths := BuildPaths("/tmp/vms/uefi-vm", "/tmp/iso", cfg)
+	args := BuildArgs(cfg, paths, true)
+
+	// Verify either pflash or -bios is present in args
+	hasUEFI := false
+	for i, arg := range args {
+		if arg == "-bios" && i+1 < len(args) && strings.Contains(args[i+1], "OVMF") {
+			hasUEFI = true
+			break
+		}
+		if arg == "-drive" && i+1 < len(args) && strings.Contains(args[i+1], "pflash") {
+			hasUEFI = true
+			break
+		}
+	}
+
+	if !hasUEFI {
+		t.Errorf("expected UEFI firmware (-drive if=pflash or -bios) in args, got: %v", args)
+	}
+}
+
+func TestBuildArgs_WithBIOS(t *testing.T) {
+	cfg := &Config{
+		ID:       "bios-vm",
+		CPUs:     1,
+		MemoryMB: 1024,
+		Firmware: "bios",
+	}
+
+	paths := BuildPaths("/tmp/vms/bios-vm", "/tmp/iso", cfg)
+	args := BuildArgs(cfg, paths, true)
+
+	// BIOS should NOT include pflash or -bios flags
+	for i, arg := range args {
+		if arg == "-bios" {
+			t.Errorf("unexpected -bios flag for BIOS VM")
+		}
+		if arg == "-drive" && i+1 < len(args) && strings.Contains(args[i+1], "pflash") {
+			t.Errorf("unexpected pflash drive for BIOS VM")
+		}
+	}
+}
