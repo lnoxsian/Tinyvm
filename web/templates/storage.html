@@ -1,0 +1,60 @@
+{{ define "title" }}Storage - TinyVM{{ end }}
+
+{{ define "content" }}
+<div class="content-header">
+    <h1 class="content-title">Storage Pools</h1>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-label">Storage Root</span>
+        <div class="stat-value" style="font-size: 1.25rem; font-family: monospace;">{{ .DataDir }}</div>
+        <div class="stat-meta">Primary VM &amp; ISO data directory</div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">ISO Directory</span>
+        <div class="stat-value" style="font-size: 1.25rem; font-family: monospace;">{{ .ISODir }}</div>
+        <div class="stat-meta">{{ len .ISOs }} ISO images discovered</div>
+    </div>
+</div>
+
+<div class="content-header" style="margin-top: 2rem;">
+    <h2 class="content-title" style="font-size: 1.1rem;">Discovered ISO Images</h2>
+</div>
+
+{{ if .ISOs }}
+<div class="card" style="padding: 0; overflow: hidden;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+        <thead>
+            <tr style="border-bottom: 1px solid var(--border); background-color: rgba(255, 255, 255, 0.02);">
+                <th style="padding: 0.75rem 1rem;">ISO Filename</th>
+                <th style="padding: 0.75rem 1rem;">File Size</th>
+                <th style="padding: 0.75rem 1rem;">Path</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .ISOs }}
+            <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 0.75rem 1rem; font-weight: 500;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <span>{{ .Name }}</span>
+                    </div>
+                </td>
+                <td style="padding: 0.75rem 1rem; color: var(--text-muted);">{{ .SizeFormatted }}</td>
+                <td style="padding: 0.75rem 1rem; color: var(--text-muted); font-family: monospace; font-size: 0.8rem;">{{ .Path }}</td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+</div>
+{{ else }}
+<div class="empty-state card">
+    <h3>No ISO Images Found</h3>
+    <p style="color: var(--text-muted);">Place your installation ISOs in <code>{{ .ISODir }}</code> to attach them to virtual machines.</p>
+</div>
+{{ end }}
+{{ end }}

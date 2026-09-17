@@ -36,7 +36,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger, vmMgr *vm.Manager) (*Ser
 	}
 
 	// Parse web templates
-	pageTemplates := []string{"dashboard", "vm", "create", "console", "settings"}
+	pageTemplates := []string{"dashboard", "vm", "create", "console", "settings", "storage", "detail"}
 	for _, page := range pageTemplates {
 		tmpl, err := template.ParseFS(web.Files, "templates/layout.html", "templates/"+page+".html")
 		if err != nil {

@@ -115,3 +115,47 @@ func TestWriteJSONError(t *testing.T) {
 		t.Errorf("expected message 'test error message', got %s", errResp.Error.Message)
 	}
 }
+
+func TestWebPagesRendering(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create a dummy VM so /vms and /vms/{id} have data to render
+	_, err := srv.vmMgr.CreateVM(vm.VMConfig{
+		ID:         "test-web-vm",
+		Name:       "Test Web VM",
+		CPUs:       1,
+		MemoryMB:   256,
+		DiskSize:   "10M",
+		DiskFormat: "qcow2",
+	})
+	if err != nil {
+		t.Fatalf("failed to create dummy VM: %v", err)
+	}
+
+	pages := []struct {
+		url          string
+		expectedText string
+	}{
+		{"/", "Dashboard Overview"},
+		{"/vms", "Virtual Machines"},
+		{"/vms/new", "Create Virtual Machine"},
+		{"/vms/test-web-vm", "Test Web VM"},
+		{"/vms/test-web-vm/console", "Console"},
+		{"/storage", "Storage Pools"},
+		{"/settings", "Application Settings"},
+	}
+
+	for _, p := range pages {
+		req := httptest.NewRequest(http.MethodGet, p.url, nil)
+		req.Header.Set("Accept", "text/html,application/xhtml+xml")
+		rec := httptest.NewRecorder()
+		srv.httpServer.Handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Errorf("page %s returned status %d, expected 200. Body: %s", p.url, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), p.expectedText) {
+			t.Errorf("page %s expected to contain %q, but didn't. Body: %s", p.url, p.expectedText, rec.Body.String())
+		}
+	}
+}

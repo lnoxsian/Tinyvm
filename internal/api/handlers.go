@@ -1,13 +1,16 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"runtime"
 	"strings"
 
 	"tinyvm/internal/version"
+	"tinyvm/internal/vm"
 )
 
 // BasePageData contains common fields for page templates.
@@ -53,6 +56,27 @@ type SettingsPageData struct {
 	ListenAddr string
 }
 
+// StoragePageData provides presentation data for the storage pool view.
+type StoragePageData struct {
+	BasePageData
+	DataDir string
+	ISODir  string
+	ISOs    []ISOViewModel
+}
+
+// ISOViewModel holds formatted metadata for ISO display.
+type ISOViewModel struct {
+	Name          string
+	Path          string
+	SizeFormatted string
+}
+
+// VMDetailPageData provides presentation data for a specific VM view.
+type VMDetailPageData struct {
+	BasePageData
+	VM *vm.VM
+}
+
 func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	tmpl, ok := s.templates[name]
 	if !ok {
@@ -60,11 +84,16 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.Execute(w, data); err != nil {
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
 		s.logger.Error("Failed to render template", "template", name, "err", err)
 		http.Error(w, "Template execution error", http.StatusInternalServerError)
+		return
 	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = buf.WriteTo(w)
 }
 
 func checkKVM() bool {
@@ -177,12 +206,27 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := BasePageData{
-		ActiveNav:  "vms",
-		Version:    version.Version,
-		HostOnline: true,
+	id := s.extractVMID(r)
+	if s.vmMgr == nil {
+		http.Error(w, "VM manager unavailable", http.StatusInternalServerError)
+		return
 	}
-	s.render(w, "vm", data)
+
+	targetVM, err := s.vmMgr.GetVM(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	data := VMDetailPageData{
+		BasePageData: BasePageData{
+			ActiveNav:  "vms",
+			Version:    version.Version,
+			HostOnline: true,
+		},
+		VM: targetVM,
+	}
+	s.render(w, "detail", data)
 }
 
 func (s *Server) handleVMConsole(w http.ResponseWriter, r *http.Request) {
@@ -195,12 +239,36 @@ func (s *Server) handleVMConsole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStorage(w http.ResponseWriter, r *http.Request) {
-	data := BasePageData{
-		ActiveNav:  "storage",
-		Version:    version.Version,
-		HostOnline: true,
+	var isoModels []ISOViewModel
+	var isoDir string
+	if s.vmMgr != nil && s.vmMgr.Storage() != nil {
+		isoDir = s.vmMgr.Storage().ISODir()
+		if rawISOs, err := s.vmMgr.Storage().ListISOs(); err == nil {
+			for _, item := range rawISOs {
+				sizeStr := fmt.Sprintf("%.1f MB", float64(item.SizeBytes)/(1024*1024))
+				if item.SizeBytes >= 1024*1024*1024 {
+					sizeStr = fmt.Sprintf("%.2f GB", float64(item.SizeBytes)/(1024*1024*1024))
+				}
+				isoModels = append(isoModels, ISOViewModel{
+					Name:          item.Name,
+					Path:          item.Path,
+					SizeFormatted: sizeStr,
+				})
+			}
+		}
 	}
-	s.render(w, "dashboard", data)
+
+	data := StoragePageData{
+		BasePageData: BasePageData{
+			ActiveNav:  "storage",
+			Version:    version.Version,
+			HostOnline: true,
+		},
+		DataDir: s.cfg.DataDir,
+		ISODir:  isoDir,
+		ISOs:    isoModels,
+	}
+	s.render(w, "storage", data)
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
