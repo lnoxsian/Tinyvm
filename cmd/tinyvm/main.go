@@ -10,7 +10,9 @@ import (
 
 	"tinyvm/internal/api"
 	"tinyvm/internal/config"
+	"tinyvm/internal/storage"
 	"tinyvm/internal/version"
+	"tinyvm/internal/vm"
 )
 
 func printUsage() {
@@ -72,7 +74,11 @@ func main() {
 		runServe(args[1:])
 		return
 
-	case "list", "start", "stop", "shutdown", "status":
+	case "list":
+		runList(args[1:])
+		return
+
+	case "start", "stop", "shutdown", "status":
 		fmt.Printf("tinyvm %s: VM lifecycle manager will be connected in Phase 4.\n", cmd)
 		return
 
@@ -88,6 +94,43 @@ func main() {
 	}
 }
 
+func runList(args []string) {
+	cfg, _, err := config.Load(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
+		os.Exit(1)
+	}
+
+	store, err := storage.New(cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error accessing storage: %v\n", err)
+		os.Exit(1)
+	}
+
+	mgr := vm.NewManager(store)
+	vms := mgr.ListVMs()
+	if len(vms) == 0 {
+		fmt.Println("No virtual machines found.")
+		return
+	}
+
+	fmt.Printf("%-18s %-20s %-6s %-10s %-10s %s\n", "ID", "NAME", "CPUS", "RAM", "DISK", "STATUS")
+	for _, v := range vms {
+		diskSize := v.Config.DiskSize
+		if diskSize == "" {
+			diskSize = "Standard"
+		}
+		fmt.Printf("%-18s %-20s %-6d %-10s %-10s %s\n",
+			v.Config.ID,
+			v.Config.Name,
+			v.Config.CPUs,
+			fmt.Sprintf("%d MB", v.Config.MemoryMB),
+			diskSize,
+			v.Runtime.State,
+		)
+	}
+}
+
 func runServe(args []string) {
 	cfg, _, err := config.Load(args)
 	if err != nil {
@@ -97,11 +140,15 @@ func runServe(args []string) {
 
 	logger := cfg.SetupLogger()
 
-	if err := cfg.EnsureDirs(); err != nil {
-		logger.Warn("Could not create all default data directories (permission issues may require sudo or custom -data-dir)", "data_dir", cfg.DataDir, "err", err)
+	store, err := storage.New(cfg.DataDir)
+	if err != nil {
+		logger.Error("Failed to initialize storage", "data_dir", cfg.DataDir, "err", err)
+		os.Exit(1)
 	}
 
-	srv, err := api.NewServer(cfg, logger)
+	vmMgr := vm.NewManager(store)
+
+	srv, err := api.NewServer(cfg, logger, vmMgr)
 	if err != nil {
 		logger.Error("Failed to initialize server", "err", err)
 		os.Exit(1)

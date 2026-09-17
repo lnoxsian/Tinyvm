@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tinyvm/internal/config"
+	"tinyvm/internal/vm"
 	"tinyvm/web"
 )
 
@@ -18,10 +19,11 @@ type Server struct {
 	logger     *slog.Logger
 	httpServer *http.Server
 	templates  map[string]*template.Template
+	vmMgr      *vm.Manager
 }
 
 // NewServer creates a new configured Server instance.
-func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
+func NewServer(cfg *config.Config, logger *slog.Logger, vmMgr *vm.Manager) (*Server, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -30,6 +32,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger) (*Server, error) {
 		cfg:       cfg,
 		logger:    logger,
 		templates: make(map[string]*template.Template),
+		vmMgr:     vmMgr,
 	}
 
 	// Parse web templates

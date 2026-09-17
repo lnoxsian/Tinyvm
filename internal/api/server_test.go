@@ -5,14 +5,31 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"os"
 	"testing"
 
 	"tinyvm/internal/config"
+	"tinyvm/internal/storage"
+	"tinyvm/internal/vm"
 )
 
 func newTestServer(t *testing.T) *Server {
+	tmpDir, err := os.MkdirTemp("", "tinyvm-api-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
 	cfg := config.DefaultConfig()
-	srv, err := NewServer(cfg, nil)
+	cfg.DataDir = tmpDir
+
+	s, err := storage.New(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to initialize storage: %v", err)
+	}
+
+	vmMgr := vm.NewManager(s)
+	srv, err := NewServer(cfg, nil, vmMgr)
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)
 	}

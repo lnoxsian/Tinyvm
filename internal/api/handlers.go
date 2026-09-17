@@ -75,16 +75,55 @@ func checkKVM() bool {
 	return true
 }
 
+func (s *Server) getVMCardViews() ([]VMCardView, int, int) {
+	if s.vmMgr == nil {
+		return nil, 0, 0
+	}
+
+	rawVMs := s.vmMgr.ListVMs()
+	views := make([]VMCardView, 0, len(rawVMs))
+	runningCount := 0
+	stoppedCount := 0
+
+	for _, v := range rawVMs {
+		st := string(v.Runtime.State)
+		if st == "running" {
+			runningCount++
+		} else {
+			stoppedCount++
+		}
+
+		diskSize := v.Config.DiskSize
+		if diskSize == "" {
+			diskSize = "Standard"
+		}
+
+		views = append(views, VMCardView{
+			ID:          v.Config.ID,
+			Name:        v.Config.Name,
+			Status:      st,
+			StatusClass: st,
+			CPUs:        v.Config.CPUs,
+			MemoryMB:    v.Config.MemoryMB,
+			DiskSize:    diskSize,
+		})
+	}
+
+	return views, runningCount, stoppedCount
+}
+
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	views, running, stopped := s.getVMCardViews()
+
 	data := DashboardPageData{
 		BasePageData: BasePageData{
 			ActiveNav:  "dashboard",
 			Version:    version.Version,
 			HostOnline: true,
 		},
-		TotalVMs:    0,
-		RunningVMs:  0,
-		StoppedVMs:  0,
+		TotalVMs:    len(views),
+		RunningVMs:  running,
+		StoppedVMs:  stopped,
 		CPUPercent:  0,
 		CPUCores:    runtime.NumCPU(),
 		KVMEnabled:  checkKVM(),
@@ -94,20 +133,23 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		DiskUsedGB:  0.0,
 		DiskTotalGB: 0.0,
 		DiskPercent: 0,
-		VMs:         nil,
+		VMs:         views,
 	}
 
 	s.render(w, "dashboard", data)
 }
 
 func (s *Server) handleVMsList(w http.ResponseWriter, r *http.Request) {
+	views, _, _ := s.getVMCardViews()
+
 	data := DashboardPageData{
 		BasePageData: BasePageData{
 			ActiveNav:  "vms",
 			Version:    version.Version,
 			HostOnline: true,
 		},
-		VMs: nil,
+		TotalVMs: len(views),
+		VMs:      views,
 	}
 	s.render(w, "vm", data)
 }
