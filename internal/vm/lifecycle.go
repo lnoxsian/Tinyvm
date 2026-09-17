@@ -21,6 +21,8 @@ type VMStatusInfo struct {
 	Runtime         VMRuntime     `json:"runtime"`
 	Uptime          time.Duration `json:"uptime,omitempty"`
 	DiskActualBytes int64         `json:"disk_actual_bytes,omitempty"`
+	Firmware        string        `json:"firmware"`
+	EFIVarsPath     string        `json:"efi_vars_path,omitempty"`
 	LogPath         string        `json:"log_path"`
 	QMPSockPath     string        `json:"qmp_sock_path"`
 	ConsoleSockPath string        `json:"console_sock_path"`
@@ -297,11 +299,18 @@ func (m *Manager) StatusVM(id string) (*VMStatusInfo, error) {
 		}
 	}
 
+	var efiVarsPath string
+	if cfg.Firmware == "uefi" {
+		efiVarsPath = filepath.Join(vmDir, "efivars.fd")
+	}
+
 	return &VMStatusInfo{
 		Config:          cfg,
 		Runtime:         runtime,
 		Uptime:          uptime,
 		DiskActualBytes: diskActualBytes,
+		Firmware:        cfg.Firmware,
+		EFIVarsPath:     efiVarsPath,
 		LogPath:         filepath.Join(vmDir, "logs", "qemu.log"),
 		QMPSockPath:     filepath.Join(vmDir, "qmp.sock"),
 		ConsoleSockPath: filepath.Join(vmDir, "console.sock"),

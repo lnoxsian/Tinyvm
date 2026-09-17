@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"tinyvm/internal/host"
 	"tinyvm/internal/qemu"
 	"tinyvm/internal/storage"
 )
@@ -124,7 +125,22 @@ func (m *Manager) CreateVM(cfg VMConfig) (*VM, error) {
 		return nil, fmt.Errorf("failed to create VM storage: %w", err)
 	}
 
-	// 2. Create disk if DiskSize is specified
+	// 2. Provision UEFI NVRAM vars if firmware is uefi
+	if cfg.Firmware == "uefi" {
+		fw := host.DetectUEFIFirmware()
+		if !fw.Available {
+			_ = m.storage.DeleteVMStorage(cfg.ID)
+			return nil, host.ErrUEFINotSupported
+		}
+		if fw.IsSplit {
+			if err := host.InitEFIVars(vmDir, fw); err != nil {
+				_ = m.storage.DeleteVMStorage(cfg.ID)
+				return nil, fmt.Errorf("failed to initialize EFI vars: %w", err)
+			}
+		}
+	}
+
+	// 3. Create disk if DiskSize is specified
 	if cfg.DiskSize != "" {
 		diskPath := filepath.Join(vmDir, cfg.Disk)
 		if err := storage.CreateDisk(diskPath, cfg.DiskFormat, cfg.DiskSize); err != nil {
@@ -134,7 +150,7 @@ func (m *Manager) CreateVM(cfg VMConfig) (*VM, error) {
 		}
 	}
 
-	// 3. Write config.json
+	// 4. Write config.json
 	if err := m.storage.WriteVMConfig(cfg.ID, cfg); err != nil {
 		_ = m.storage.DeleteVMStorage(cfg.ID)
 		return nil, fmt.Errorf("failed to save VM config: %w", err)

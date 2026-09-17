@@ -176,6 +176,7 @@ func runCreate(args []string) {
 	diskFormat := fs.String("disk-format", "qcow2", "Disk format (qcow2 or raw)")
 	diskSize := fs.String("disk-size", "10G", "Virtual disk size (e.g. 20G, 500M)")
 	iso := fs.String("iso", "", "Optional boot ISO file from storage")
+	firmware := fs.String("firmware", "bios", "Boot firmware: 'bios' (default) or 'uefi'")
 	sshPort := fs.Int("ssh-port", 0, "Optional host port to forward to guest SSH (port 22)")
 	dataDir := fs.String("data-dir", "", "Custom data directory")
 
@@ -203,6 +204,7 @@ func runCreate(args []string) {
 		DiskFormat: *diskFormat,
 		DiskSize:   *diskSize,
 		ISO:        *iso,
+		Firmware:   *firmware,
 		Network: vm.NetworkConfig{
 			Enabled: true,
 			Mode:    "user",
@@ -221,7 +223,7 @@ func runCreate(args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Creating virtual machine '%s' (%s, %d vCPU, %d MB RAM, %s disk)...\n", *id, vmName, *cpus, *ram, *diskSize)
+	fmt.Printf("Creating virtual machine '%s' (%s, %d vCPU, %d MB RAM, %s disk, %s firmware)...\n", *id, vmName, *cpus, *ram, *diskSize, *firmware)
 	createdVM, err := mgr.CreateVM(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -349,6 +351,10 @@ func runStatus(args []string) {
 	}
 	fmt.Printf("vCPUs:        %d\n", st.Config.CPUs)
 	fmt.Printf("Memory:       %d MB\n", st.Config.MemoryMB)
+	fmt.Printf("Firmware:     %s\n", st.Config.Firmware)
+	if st.EFIVarsPath != "" {
+		fmt.Printf("EFI NVRAM:    %s\n", st.EFIVarsPath)
+	}
 	fmt.Printf("Disk:         %s (%s, virtual: %s, on-disk: %.2f MB)\n",
 		st.Config.Disk, st.Config.DiskFormat, st.Config.DiskSize, float64(st.DiskActualBytes)/(1024*1024))
 	if st.Config.ISO != "" {
@@ -390,18 +396,23 @@ func runList(args []string) {
 		return
 	}
 
-	fmt.Printf("%-18s %-20s %-6s %-10s %-10s %s\n", "ID", "NAME", "CPUS", "RAM", "DISK", "STATUS")
+	fmt.Printf("%-18s %-20s %-6s %-10s %-10s %-10s %s\n", "ID", "NAME", "CPUS", "RAM", "DISK", "FIRMWARE", "STATUS")
 	for _, v := range vms {
 		diskSize := v.Config.DiskSize
 		if diskSize == "" {
 			diskSize = "Standard"
 		}
-		fmt.Printf("%-18s %-20s %-6d %-10s %-10s %s\n",
+		fw := v.Config.Firmware
+		if fw == "" {
+			fw = "bios"
+		}
+		fmt.Printf("%-18s %-20s %-6d %-10s %-10s %-10s %s\n",
 			v.Config.ID,
 			v.Config.Name,
 			v.Config.CPUs,
 			fmt.Sprintf("%d MB", v.Config.MemoryMB),
 			diskSize,
+			fw,
 			v.Runtime.State,
 		)
 	}

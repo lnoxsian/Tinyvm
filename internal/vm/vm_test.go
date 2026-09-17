@@ -254,6 +254,27 @@ func TestVMConfig_Validation(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "valid firmware (uefi)",
+			modify: func(c *VMConfig) {
+				c.Firmware = "uefi"
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid firmware (bios)",
+			modify: func(c *VMConfig) {
+				c.Firmware = "bios"
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid firmware",
+			modify: func(c *VMConfig) {
+				c.Firmware = "openfirmware"
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -274,3 +295,63 @@ func TestVMConfig_Validation(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateAndStartVM_UEFI(t *testing.T) {
+	mgr, tmpDir := newTestManager(t)
+	defer os.RemoveAll(tmpDir)
+
+	if mgr.Launcher() == nil {
+		t.Skip("QEMU launcher not available, skipping UEFI live test")
+	}
+
+	cfg := VMConfig{
+		ID:         "uefi-live-test",
+		Name:       "UEFI Live Test VM",
+		CPUs:       1,
+		MemoryMB:   256,
+		Disk:       "disk.qcow2",
+		DiskFormat: "qcow2",
+		DiskSize:   "10M",
+		Firmware:   "uefi",
+	}
+
+	vm, err := mgr.CreateVM(cfg)
+	if err != nil {
+		t.Fatalf("failed to create UEFI VM: %v", err)
+	}
+
+	if vm.Config.Firmware != "uefi" {
+		t.Errorf("expected firmware 'uefi', got '%s'", vm.Config.Firmware)
+	}
+
+	// Verify NVRAM vars file created in VM directory
+	vmDir := filepath.Join(tmpDir, "vms", "uefi-live-test")
+	varsFile := filepath.Join(vmDir, "efivars.fd")
+	if _, err := os.Stat(varsFile); err != nil {
+		t.Errorf("expected efivars.fd to be created in VM dir: %v", err)
+	}
+
+	// Start UEFI VM
+	if err := mgr.StartVM("uefi-live-test"); err != nil {
+		t.Fatalf("failed to start UEFI VM: %v", err)
+	}
+
+	st, err := mgr.StatusVM("uefi-live-test")
+	if err != nil {
+		t.Fatalf("failed to get status for UEFI VM: %v", err)
+	}
+	if st.Firmware != "uefi" {
+		t.Errorf("expected status firmware 'uefi', got '%s'", st.Firmware)
+	}
+
+	// Stop UEFI VM
+	if err := mgr.StopVM("uefi-live-test"); err != nil {
+		t.Fatalf("failed to stop UEFI VM: %v", err)
+	}
+
+	// Delete VM
+	if err := mgr.DeleteVM("uefi-live-test"); err != nil {
+		t.Fatalf("failed to delete UEFI VM: %v", err)
+	}
+}
+
