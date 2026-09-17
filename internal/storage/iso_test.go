@@ -74,3 +74,27 @@ func TestISOStorage(t *testing.T) {
 		t.Errorf("expected ErrISONotFound after delete, got %v", err)
 	}
 }
+
+func TestCopyISO(t *testing.T) {
+	s, tmpDir := newTestStorage(t)
+	defer os.RemoveAll(tmpDir)
+
+	// Create a dummy local ISO file
+	srcPath := tmpDir + "/source-test.iso"
+	if err := os.WriteFile(srcPath, []byte("iso content to copy"), 0644); err != nil {
+		t.Fatalf("failed to write source iso: %v", err)
+	}
+
+	info, err := s.CopyISO(srcPath)
+	if err != nil {
+		t.Fatalf("CopyISO failed: %v", err)
+	}
+
+	if info.Name != "source-test.iso" {
+		t.Errorf("expected 'source-test.iso', got '%s'", info.Name)
+	}
+
+	if _, err := s.GetISO("source-test.iso"); err != nil {
+		t.Errorf("expected copied ISO to be in storage: %v", err)
+	}
+}

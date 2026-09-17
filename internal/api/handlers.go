@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
+	"tinyvm/internal/storage"
 	"tinyvm/internal/version"
 	"tinyvm/internal/vm"
 )
@@ -269,6 +272,50 @@ func (s *Server) handleStorage(w http.ResponseWriter, r *http.Request) {
 		ISOs:    isoModels,
 	}
 	s.render(w, "storage", data)
+}
+
+func (s *Server) handleStorageUpload(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil || s.vmMgr.Storage() == nil {
+		http.Error(w, "Storage manager not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	mr, err := r.MultipartReader()
+	if err != nil {
+		http.Error(w, "Invalid multipart upload: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			http.Error(w, "Error reading upload: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if part.FileName() != "" || part.FormName() == "file" {
+			fileName := filepath.Base(part.FileName())
+			if err := storage.ValidateISOName(fileName); err != nil {
+				_ = part.Close()
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
+			_, err := s.vmMgr.Storage().SaveISO(fileName, part)
+			_ = part.Close()
+			if err != nil {
+				http.Error(w, "Failed to save ISO: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			break
+		}
+		_ = part.Close()
+	}
+
+	http.Redirect(w, r, "/storage", http.StatusSeeOther)
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {

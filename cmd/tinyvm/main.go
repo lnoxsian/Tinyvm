@@ -40,6 +40,7 @@ Commands:
   status      Show the status of a virtual machine
   qmp         Execute a QMP command against a running virtual machine
   quit        Quit a running virtual machine cleanly via QMP
+  iso         Manage ISO installation images (list, import, delete)
 
 Flags for 'serve':
   -listen string
@@ -123,6 +124,10 @@ func main() {
 
 	case "quit":
 		runQuit(args[1:])
+		return
+
+	case "iso":
+		runISO(args[1:])
 		return
 
 	default:
@@ -410,6 +415,113 @@ func runQuit(args []string) {
 
 	fmt.Printf("VM '%s' quit cleanly via QMP.\n", vmID)
 }
+
+func runISO(args []string) {
+	if len(args) == 0 {
+		fmt.Printf(`Usage:
+  tinyvm iso list [-data-dir path]
+  tinyvm iso import <path-to-file> [-data-dir path]
+  tinyvm iso delete <iso-name> [-data-dir path]
+`)
+		return
+	}
+
+	sub := args[0]
+	subArgs := args[1:]
+
+	switch sub {
+	case "list", "ls":
+		var dataDir string
+		for i := 0; i < len(subArgs); i++ {
+			if (subArgs[i] == "-data-dir" || subArgs[i] == "--data-dir") && i+1 < len(subArgs) {
+				dataDir = subArgs[i+1]
+				break
+			}
+		}
+		mgr, err := getManagerForDir(dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		isos, err := mgr.Storage().ListISOs()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		if len(isos) == 0 {
+			fmt.Println("No ISO images found in storage pool.")
+			return
+		}
+		fmt.Printf("%-30s %-12s %s\n", "NAME", "SIZE", "PATH")
+		for _, iso := range isos {
+			sizeMB := fmt.Sprintf("%.1f MB", float64(iso.SizeBytes)/(1024*1024))
+			if iso.SizeBytes >= 1024*1024*1024 {
+				sizeMB = fmt.Sprintf("%.2f GB", float64(iso.SizeBytes)/(1024*1024*1024))
+			}
+			fmt.Printf("%-30s %-12s %s\n", iso.Name, sizeMB, iso.Path)
+		}
+
+	case "import", "add", "cp":
+		if len(subArgs) == 0 {
+			fmt.Fprintln(os.Stderr, "Error: missing source ISO file path\nUsage: tinyvm iso import <path-to-file> [-data-dir path]")
+			os.Exit(1)
+		}
+		srcFile := subArgs[0]
+		var dataDir string
+		for i := 1; i < len(subArgs); i++ {
+			if (subArgs[i] == "-data-dir" || subArgs[i] == "--data-dir") && i+1 < len(subArgs) {
+				dataDir = subArgs[i+1]
+				break
+			}
+		}
+		mgr, err := getManagerForDir(dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		info, err := mgr.Storage().CopyISO(srcFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error importing ISO: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Imported ISO '%s' (%d bytes) successfully.\n", info.Name, info.SizeBytes)
+
+	case "delete", "remove", "rm":
+		if len(subArgs) == 0 {
+			fmt.Fprintln(os.Stderr, "Error: missing ISO filename\nUsage: tinyvm iso delete <iso-name> [-data-dir path]")
+			os.Exit(1)
+		}
+		isoName := subArgs[0]
+		var dataDir string
+		for i := 1; i < len(subArgs); i++ {
+			if (subArgs[i] == "-data-dir" || subArgs[i] == "--data-dir") && i+1 < len(subArgs) {
+				dataDir = subArgs[i+1]
+				break
+			}
+		}
+		mgr, err := getManagerForDir(dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		for _, v := range mgr.ListVMs() {
+			if v.Config.ISO == isoName && v.Runtime.State != vm.StateStopped {
+				fmt.Fprintf(os.Stderr, "Error: ISO '%s' is in use by running VM '%s'\n", isoName, v.Config.ID)
+				os.Exit(1)
+			}
+		}
+		if err := mgr.Storage().DeleteISO(isoName); err != nil {
+			fmt.Fprintf(os.Stderr, "Error deleting ISO: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Deleted ISO '%s' successfully.\n", isoName)
+
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown iso command: %s\n", sub)
+		os.Exit(1)
+	}
+}
+
 
 func runQMP(args []string) {
 	vmID, dataDir := parseVMIDAndDataDir("qmp", args)

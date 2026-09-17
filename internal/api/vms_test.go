@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -325,6 +326,72 @@ func TestAPISOs_List(t *testing.T) {
 	}
 	if isos[0].SizeBytes <= 0 {
 		t.Errorf("expected positive ISO size, got %d", isos[0].SizeBytes)
+	}
+}
+
+func TestAPISOs_UploadAndDelete(t *testing.T) {
+	srv := newTestServer(t)
+
+	// 1. Upload an ISO using multipart form
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", "debian-netinst.iso")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	isoBytes := []byte("debian netinst simulated iso content")
+	_, _ = part.Write(isoBytes)
+	_ = writer.Close()
+
+	uploadReq := httptest.NewRequest(http.MethodPost, "/api/v1/isos", &body)
+	uploadReq.Header.Set("Content-Type", writer.FormDataContentType())
+	uploadRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(uploadRec, uploadReq)
+
+	if uploadRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created on ISO upload, got %d: %s", uploadRec.Code, uploadRec.Body.String())
+	}
+
+	var resp ISOResponse
+	if err := json.NewDecoder(uploadRec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode upload response: %v", err)
+	}
+	if resp.Name != "debian-netinst.iso" || resp.SizeBytes != int64(len(isoBytes)) {
+		t.Errorf("unexpected ISO upload response: %+v", resp)
+	}
+
+	// 2. Duplicate upload should return 409 Conflict
+	var dupBody bytes.Buffer
+	dupWriter := multipart.NewWriter(&dupBody)
+	dupPart, _ := dupWriter.CreateFormFile("file", "debian-netinst.iso")
+	_, _ = dupPart.Write(isoBytes)
+	_ = dupWriter.Close()
+
+	dupReq := httptest.NewRequest(http.MethodPost, "/api/v1/isos", &dupBody)
+	dupReq.Header.Set("Content-Type", dupWriter.FormDataContentType())
+	dupRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(dupRec, dupReq)
+
+	if dupRec.Code != http.StatusConflict {
+		t.Errorf("expected 409 Conflict for duplicate ISO, got %d", dupRec.Code)
+	}
+
+	// 3. Delete the uploaded ISO
+	delReq := httptest.NewRequest(http.MethodDelete, "/api/v1/isos/debian-netinst.iso", nil)
+	delRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(delRec, delReq)
+
+	if delRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on ISO delete, got %d: %s", delRec.Code, delRec.Body.String())
+	}
+
+	// 4. Delete again should return 404
+	delAgainReq := httptest.NewRequest(http.MethodDelete, "/api/v1/isos/debian-netinst.iso", nil)
+	delAgainRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(delAgainRec, delAgainReq)
+
+	if delAgainRec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 Not Found on deleted ISO, got %d", delAgainRec.Code)
 	}
 }
 

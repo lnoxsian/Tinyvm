@@ -26,6 +26,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /vms/{id}", s.handleVMDetail)
 	mux.HandleFunc("GET /vms/{id}/console", s.handleVMConsole)
 	mux.HandleFunc("GET /storage", s.handleStorage)
+	mux.HandleFunc("POST /storage/upload", s.handleStorageUpload)
 	mux.HandleFunc("GET /settings", s.handleSettings)
 
 	// Health API
@@ -43,6 +44,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/vms/{id}/quit", s.handleAPIVMQuit)
 	mux.HandleFunc("GET /api/v1/vms/{id}/status", s.handleAPIVMStatus)
 	mux.HandleFunc("GET /api/v1/isos", s.handleAPIISOsList)
+	mux.HandleFunc("POST /api/v1/isos", s.handleAPIISOUpload)
+	mux.HandleFunc("DELETE /api/v1/isos/{name}", s.handleAPIISODelete)
 
 	// Direct REST API Shorthands
 	mux.HandleFunc("POST /vms", s.handleAPIVMCreate)
@@ -53,6 +56,9 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /vms/{id}/stop", s.handleAPIVMStop)
 	mux.HandleFunc("POST /vms/{id}/quit", s.handleAPIVMQuit)
 	mux.HandleFunc("GET /vms/{id}/status", s.handleAPIVMStatus)
+	mux.HandleFunc("GET /isos", s.handleAPIISOsList)
+	mux.HandleFunc("POST /isos", s.handleAPIISOUpload)
+	mux.HandleFunc("DELETE /isos/{name}", s.handleAPIISODelete)
 
 	// Action endpoints supporting query string (?id=...) and JSON body ({"id": "..."})
 	mux.HandleFunc("POST /api/v1/start", s.handleAPIVMStart)

@@ -161,6 +161,19 @@ func (s *Storage) SaveISO(name string, r io.Reader) (*ISOInfo, error) {
 	}, nil
 }
 
+// CopyISO imports a local ISO file into the ISO storage pool by streaming its contents.
+func (s *Storage) CopyISO(srcPath string) (*ISOInfo, error) {
+	cleanSrc := filepath.Clean(srcPath)
+	f, err := os.Open(cleanSrc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open source ISO file: %w", err)
+	}
+	defer f.Close()
+
+	name := filepath.Base(cleanSrc)
+	return s.SaveISO(name, f)
+}
+
 // DeleteISO removes an ISO from storage.
 func (s *Storage) DeleteISO(name string) error {
 	isoPath, err := s.ISOPath(name)

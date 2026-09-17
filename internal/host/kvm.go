@@ -72,3 +72,14 @@ func GetKVMStatus() KVMStatus {
 		Error:         errMsg,
 	}
 }
+
+// KVMUnavailableNotice returns the standard diagnostic troubleshooting guide when KVM is unavailable.
+func KVMUnavailableNotice() string {
+	return `KVM acceleration is unavailable.
+
+Make sure:
+- virtualization is enabled in BIOS/UEFI
+- /dev/kvm exists
+- the user/container has access permissions to /dev/kvm`
+}
+

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -499,4 +501,115 @@ func (s *Server) handleAPIISOsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, res)
+}
+
+// handleAPIISOUpload handles POST /api/v1/isos using direct streaming (no memory buffering).
+func (s *Server) handleAPIISOUpload(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil || s.vmMgr.Storage() == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "Storage manager not initialized")
+		return
+	}
+
+	contentType := r.Header.Get("Content-Type")
+	var fileName string
+	var reader io.Reader
+
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		mr, err := r.MultipartReader()
+		if err != nil {
+			WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "failed to parse multipart body: "+err.Error())
+			return
+		}
+
+		for {
+			part, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "failed to read part: "+err.Error())
+				return
+			}
+
+			if part.FileName() != "" || part.FormName() == "file" {
+				fileName = filepath.Base(part.FileName())
+				reader = part
+				break
+			}
+			_ = part.Close()
+		}
+	} else {
+		// Support direct raw streaming upload via ?name=filename.iso
+		fileName = strings.TrimSpace(r.URL.Query().Get("name"))
+		reader = r.Body
+	}
+
+	if fileName == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "ISO filename must be provided in multipart header or 'name' query parameter")
+		return
+	}
+
+	if err := storage.ValidateISOName(fileName); err != nil {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
+		return
+	}
+
+	info, err := s.vmMgr.Storage().SaveISO(fileName, reader)
+	if err != nil {
+		if errors.Is(err, storage.ErrISOExists) {
+			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, fmt.Sprintf("ISO '%s' already exists", fileName))
+			return
+		}
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "failed to save ISO: "+err.Error())
+		return
+	}
+
+	s.logger.Info("Uploaded ISO image", "name", info.Name, "size_bytes", info.SizeBytes)
+	writeJSON(w, http.StatusCreated, ISOResponse{
+		Name:      info.Name,
+		SizeBytes: info.SizeBytes,
+	})
+}
+
+// handleAPIISODelete handles DELETE /api/v1/isos/{name}
+func (s *Server) handleAPIISODelete(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil || s.vmMgr.Storage() == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "Storage manager not initialized")
+		return
+	}
+
+	name := r.PathValue("name")
+	if name == "" {
+		name = r.URL.Query().Get("name")
+	}
+	if name == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "ISO name is required")
+		return
+	}
+
+	// Safety check: ensure no running VM is using this ISO
+	for _, v := range s.vmMgr.ListVMs() {
+		if v.Config.ISO == name && v.Runtime.State != vm.StateStopped {
+			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, fmt.Sprintf("ISO '%s' is in use by running VM '%s'", name, v.Config.ID))
+			return
+		}
+	}
+
+	if err := s.vmMgr.Storage().DeleteISO(name); err != nil {
+		if errors.Is(err, storage.ErrISONotFound) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("ISO '%s' not found", name))
+			return
+		}
+		if errors.Is(err, storage.ErrInvalidISOName) || errors.Is(err, storage.ErrPathEscapesRoot) {
+			WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
+			return
+		}
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "failed to delete ISO: "+err.Error())
+		return
+	}
+
+	s.logger.Info("Deleted ISO image", "name", name)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": fmt.Sprintf("ISO '%s' deleted successfully", name),
+	})
 }
