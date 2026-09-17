@@ -17,9 +17,14 @@ var (
 
 // VMStatusInfo holds detailed operational and resource information about a VM.
 type VMStatusInfo struct {
+	ID              string        `json:"id"`
+	Status          string        `json:"status"`
+	CPUs            int           `json:"cpus"`
+	MemoryMB        int           `json:"memory_mb"`
 	Config          VMConfig      `json:"config"`
 	Runtime         VMRuntime     `json:"runtime"`
 	Uptime          time.Duration `json:"uptime,omitempty"`
+	UptimeSeconds   int64         `json:"uptime_seconds,omitempty"`
 	DiskActualBytes int64         `json:"disk_actual_bytes,omitempty"`
 	Firmware        string        `json:"firmware"`
 	EFIVarsPath     string        `json:"efi_vars_path,omitempty"`
@@ -363,10 +368,20 @@ func (m *Manager) StatusVM(id string) (*VMStatusInfo, error) {
 		}
 	}
 
+	var uptimeSecs int64
+	if uptime > 0 {
+		uptimeSecs = int64(uptime.Seconds())
+	}
+
 	return &VMStatusInfo{
+		ID:              cfg.ID,
+		Status:          string(runtime.State),
+		CPUs:            cfg.CPUs,
+		MemoryMB:        cfg.MemoryMB,
 		Config:          cfg,
 		Runtime:         runtime,
 		Uptime:          uptime,
+		UptimeSeconds:   uptimeSecs,
 		DiskActualBytes: diskActualBytes,
 		Firmware:        cfg.Firmware,
 		EFIVarsPath:     efiVarsPath,

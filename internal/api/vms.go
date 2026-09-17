@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,12 +16,15 @@ import (
 	"tinyvm/internal/vm"
 )
 
-// CreateVMRequest represents the JSON payload to create a new VM.
+// CreateVMRequest represents the JSON or form payload to create a new VM.
 type CreateVMRequest struct {
 	ID         string           `json:"id"`
 	Name       string           `json:"name"`
 	CPUs       int              `json:"cpus"`
+	CPU        int              `json:"cpu,omitempty"`
 	MemoryMB   int              `json:"memory_mb"`
+	Memory     int              `json:"memory,omitempty"`
+	RAM        int              `json:"ram,omitempty"`
 	Disk       string           `json:"disk,omitempty"`
 	DiskFormat string           `json:"disk_format,omitempty"`
 	DiskSize   string           `json:"disk_size,omitempty"`
@@ -115,28 +119,91 @@ func (s *Server) handleAPIVMsList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// handleAPIVMCreate handles POST /api/v1/vms
+// handleAPIVMCreate handles POST /api/v1/vms and POST /vms
 func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB limit
+	contentType := r.Header.Get("Content-Type")
 	var req CreateVMRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "malformed request payload: "+err.Error())
-		return
+
+	if strings.HasPrefix(contentType, "application/x-www-form-urlencoded") || strings.HasPrefix(contentType, "multipart/form-data") {
+		if err := r.ParseForm(); err != nil {
+			WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "failed to parse form data: "+err.Error())
+			return
+		}
+		req.ID = strings.TrimSpace(r.FormValue("id"))
+		req.Name = strings.TrimSpace(r.FormValue("name"))
+		if c, err := strconv.Atoi(r.FormValue("cpus")); err == nil && c > 0 {
+			req.CPUs = c
+		} else if c, err := strconv.Atoi(r.FormValue("cpu")); err == nil && c > 0 {
+			req.CPUs = c
+		}
+		if m, err := strconv.Atoi(r.FormValue("memory_mb")); err == nil && m > 0 {
+			req.MemoryMB = m
+		} else if m, err := strconv.Atoi(r.FormValue("memory")); err == nil && m > 0 {
+			req.MemoryMB = m
+		} else if m, err := strconv.Atoi(r.FormValue("ram")); err == nil && m > 0 {
+			req.MemoryMB = m
+		}
+		req.Disk = strings.TrimSpace(r.FormValue("disk"))
+		req.DiskFormat = strings.TrimSpace(r.FormValue("disk_format"))
+		req.DiskSize = strings.TrimSpace(r.FormValue("disk_size"))
+		req.ISO = strings.TrimSpace(r.FormValue("iso"))
+		req.Firmware = strings.TrimSpace(r.FormValue("firmware"))
+		if p, err := strconv.Atoi(r.FormValue("ssh_port")); err == nil && p > 0 {
+			req.Network.SSHPort = p
+			req.Network.Enabled = true
+			req.Network.Mode = "user"
+		}
+	} else {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB limit
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "malformed request payload: "+err.Error())
+			return
+		}
 	}
 
-	name := req.Name
-	if name == "" {
-		name = req.ID
+	if req.ID == "" && req.Name != "" {
+		req.ID = req.Name
+	}
+	if req.Name == "" {
+		req.Name = req.ID
+	}
+	if req.CPUs == 0 && req.CPU > 0 {
+		req.CPUs = req.CPU
+	}
+	if req.CPUs <= 0 {
+		req.CPUs = 1
+	}
+	if req.MemoryMB == 0 {
+		if req.Memory > 0 {
+			req.MemoryMB = req.Memory
+		} else if req.RAM > 0 {
+			req.MemoryMB = req.RAM
+		} else {
+			req.MemoryMB = 1024
+		}
+	}
+	if req.DiskFormat == "" {
+		req.DiskFormat = "qcow2"
+	}
+	if req.DiskSize == "" {
+		req.DiskSize = "10G"
+	}
+	if req.Firmware == "" {
+		req.Firmware = "bios"
+	}
+	if !req.Network.Enabled && req.Network.SSHPort == 0 && len(req.Network.Ports) == 0 {
+		req.Network.Enabled = true
+		req.Network.Mode = "user"
 	}
 
 	cfg := vm.VMConfig{
 		ID:         req.ID,
-		Name:       name,
+		Name:       req.Name,
 		CPUs:       req.CPUs,
 		MemoryMB:   req.MemoryMB,
 		Disk:       req.Disk,
@@ -177,6 +244,12 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("Created virtual machine", "id", created.Config.ID, "name", created.Config.Name)
+
+	if strings.Contains(r.Header.Get("Accept"), "text/html") && !strings.Contains(r.Header.Get("Accept"), "application/json") {
+		http.Redirect(w, r, "/vms/"+created.Config.ID, http.StatusSeeOther)
+		return
+	}
+
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/vms/%s", created.Config.ID))
 	writeJSON(w, http.StatusCreated, toVMResponse(created))
 }
@@ -220,13 +293,21 @@ func (s *Server) handleAPIVMDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	force := r.URL.Query().Get("force") == "true" || r.URL.Query().Get("force") == "1"
+	if force && s.vmMgr.IsVMRunning(id) {
+		s.logger.Info("Force-stopping VM before deletion", "id", id)
+		if err := s.vmMgr.StopVM(id); err != nil {
+			s.logger.Warn("Failed to force stop VM before deletion", "id", id, "err", err)
+		}
+	}
+
 	if err := s.vmMgr.DeleteVM(id); err != nil {
 		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
 			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
 			return
 		}
 		if errors.Is(err, vm.ErrVMAlreadyRunning) {
-			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, "cannot delete running VM; stop it first")
+			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, "cannot delete running VM; stop it first or pass ?force=true")
 			return
 		}
 		s.logger.Error("Failed to delete VM", "id", id, "err", err)
@@ -453,7 +534,7 @@ func (s *Server) handleAPIVMQuit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAPIVMStatus handles GET /api/v1/vms/{id}/status and /status
+// handleAPIVMStatus handles GET/POST /api/v1/vms/{id}/status and /status
 func (s *Server) handleAPIVMStatus(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
@@ -461,6 +542,12 @@ func (s *Server) handleAPIVMStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return

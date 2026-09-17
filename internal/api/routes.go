@@ -67,6 +67,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/stop", s.handleAPIVMStop)
 	mux.HandleFunc("POST /api/v1/quit", s.handleAPIVMQuit)
 	mux.HandleFunc("GET /api/v1/status", s.handleAPIVMStatus)
+	mux.HandleFunc("POST /api/v1/status", s.handleAPIVMStatus)
 
 	mux.HandleFunc("POST /start", s.handleAPIVMStart)
 	mux.HandleFunc("POST /shutdown", s.handleAPIVMShutdown)
@@ -74,4 +75,5 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /stop", s.handleAPIVMStop)
 	mux.HandleFunc("POST /quit", s.handleAPIVMQuit)
 	mux.HandleFunc("GET /status", s.handleAPIVMStatus)
+	mux.HandleFunc("POST /status", s.handleAPIVMStatus)
 }

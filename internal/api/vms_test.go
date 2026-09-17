@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -509,3 +510,116 @@ func TestAPI_SecurityHeaders(t *testing.T) {
 		t.Errorf("expected X-Frame-Options: SAMEORIGIN")
 	}
 }
+
+func TestAPIVMs_FormURLEncodedCreate(t *testing.T) {
+	srv := newTestServer(t)
+
+	formData := "name=form-vm&cpu=2&ram=1024&disk_size=10M&disk_format=qcow2&firmware=bios"
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", strings.NewReader(formData))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created on form POST, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var created VMResponse
+	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if created.ID != "form-vm" || created.CPUs != 2 || created.MemoryMB != 1024 {
+		t.Errorf("unexpected created VM from form: %+v", created)
+	}
+}
+
+func TestAPIVMs_ForceDelete(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create and start VM
+	body, _ := json.Marshal(CreateVMRequest{
+		ID:         "force-del-vm",
+		Name:       "Force Del VM",
+		CPUs:       1,
+		MemoryMB:   256,
+		DiskSize:   "10M",
+		DiskFormat: "qcow2",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("failed to create VM: %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/vms/force-del-vm/start", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("failed to start VM: %d", rec.Code)
+	}
+
+	// Normal delete fails with 409 Conflict
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/vms/force-del-vm", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Errorf("expected 409 Conflict when deleting running VM without force, got %d", rec.Code)
+	}
+
+	// Force delete succeeds with 200 OK
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/vms/force-del-vm?force=true", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 OK on force delete, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAPIVMs_StatusJSONBodyAndTopLevelFields(t *testing.T) {
+	srv := newTestServer(t)
+
+	body, _ := json.Marshal(CreateVMRequest{
+		ID:         "status-test-vm",
+		Name:       "Status Test VM",
+		CPUs:       2,
+		MemoryMB:   512,
+		DiskSize:   "10M",
+		DiskFormat: "qcow2",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("failed to create VM: %d", rec.Code)
+	}
+
+	// Query status via POST /status with JSON body
+	queryBody, _ := json.Marshal(VMActionRequest{ID: "status-test-vm"})
+	req = httptest.NewRequest(http.MethodPost, "/status", bytes.NewReader(queryBody))
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on POST /status with JSON body, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var statusResp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&statusResp); err != nil {
+		t.Fatalf("failed to decode status: %v", err)
+	}
+
+	// Verify top-level Section 24 fields
+	if statusResp["id"] != "status-test-vm" {
+		t.Errorf("expected top-level id 'status-test-vm', got %v", statusResp["id"])
+	}
+	if statusResp["status"] != "stopped" {
+		t.Errorf("expected top-level status 'stopped', got %v", statusResp["status"])
+	}
+	if statusResp["cpus"] != float64(2) {
+		t.Errorf("expected top-level cpus 2, got %v", statusResp["cpus"])
+	}
+	if statusResp["memory_mb"] != float64(512) {
+		t.Errorf("expected top-level memory_mb 512, got %v", statusResp["memory_mb"])
+	}
+}
+
