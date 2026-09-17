@@ -54,6 +54,12 @@ func handleMockQMPConn(l net.Listener, conn net.Conn) {
 			_, _ = conn.Write([]byte(`{"return": {}}` + "\n"))
 		case "query-status":
 			_, _ = conn.Write([]byte(`{"return": {"running": true, "singlestep": false, "status": "running"}}` + "\n"))
+		case "query-cpus-fast":
+			_, _ = conn.Write([]byte(`{"return": [{"cpu-index": 0, "thread-id": 1234}]}` + "\n"))
+		case "query-memory-size-summary":
+			_, _ = conn.Write([]byte(`{"return": {"base-memory": 1073741824, "plugged-memory": 0}}` + "\n"))
+		case "query-block":
+			_, _ = conn.Write([]byte(`{"return": [{"device": "virtio0", "type": "hd", "removable": false, "locked": false, "inserted": {"file": "/path/to/disk.qcow2", "ro": false, "drv": "qcow2"}}]}` + "\n"))
 		case "system_powerdown":
 			// Emit an async event first, then the return value
 			event := `{"event": "POWERDOWN", "timestamp": {"seconds": 1000, "microseconds": 0}}` + "\n"
@@ -106,6 +112,34 @@ func TestQMPClient_MockServer(t *testing.T) {
 	if !status.Running || status.Status != "running" {
 		t.Errorf("unexpected query-status result: %+v", status)
 	}
+
+	// 2b. Test QueryCPUs
+	cpus, err := client.QueryCPUs()
+	if err != nil {
+		t.Fatalf("client.QueryCPUs failed: %v", err)
+	}
+	if len(cpus) != 1 || cpus[0].CPUIndex != 0 {
+		t.Errorf("unexpected cpus result: %+v", cpus)
+	}
+
+	// 2c. Test QueryMemorySizeSummary
+	mem, err := client.QueryMemorySizeSummary()
+	if err != nil {
+		t.Fatalf("client.QueryMemorySizeSummary failed: %v", err)
+	}
+	if mem.BaseMemory != 1073741824 {
+		t.Errorf("unexpected base memory: %d", mem.BaseMemory)
+	}
+
+	// 2d. Test QueryBlock
+	blocks, err := client.QueryBlock()
+	if err != nil {
+		t.Fatalf("client.QueryBlock failed: %v", err)
+	}
+	if len(blocks) != 1 || blocks[0].Device != "virtio0" {
+		t.Errorf("unexpected block devices: %+v", blocks)
+	}
+
 
 	// 3. Test SystemPowerdown with Async Event Handling
 	if err := client.SystemPowerdown(); err != nil {

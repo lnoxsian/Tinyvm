@@ -12,6 +12,7 @@ import (
 type Launcher struct {
 	binaryPath string
 	useKVM     bool
+	kvmStatus  host.KVMStatus
 	mu         sync.RWMutex
 }
 
@@ -22,12 +23,20 @@ func NewLauncher() (*Launcher, error) {
 		return nil, fmt.Errorf("qemu-system-x86_64 not found in PATH: %w", err)
 	}
 
-	kvmOk, _ := host.CheckKVM()
+	kvmStatus := host.GetKVMStatus()
 
 	return &Launcher{
 		binaryPath: bin,
-		useKVM:     kvmOk,
+		useKVM:     kvmStatus.Available,
+		kvmStatus:  kvmStatus,
 	}, nil
+}
+
+// KVMStatus returns the host KVM capability status.
+func (l *Launcher) KVMStatus() host.KVMStatus {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.kvmStatus
 }
 
 // BinaryPath returns the path to the discovered qemu-system-x86_64 executable.

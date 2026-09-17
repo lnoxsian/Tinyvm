@@ -37,6 +37,40 @@ type QMPStatusResult struct {
 	Status     string `json:"status"` // "running", "paused", "shutdown", "prelaunch", etc.
 }
 
+// QMPCPUInfo represents CPU details returned by query-cpus-fast or query-cpus.
+type QMPCPUInfo struct {
+	CPUIndex int    `json:"cpu-index"`
+	QOMPath  string `json:"qom-path,omitempty"`
+	ThreadID int    `json:"thread-id,omitempty"`
+	Halted   bool   `json:"halted,omitempty"`
+}
+
+// QMPMemorySummary represents memory sizing details returned by query-memory-size-summary.
+type QMPMemorySummary struct {
+	BaseMemory    int64 `json:"base-memory"`
+	PluggedMemory int64 `json:"plugged-memory,omitempty"`
+}
+
+// QMPBlockInserted details the media inserted into a block device.
+type QMPBlockInserted struct {
+	File      string `json:"file"`
+	NodeName  string `json:"node-name,omitempty"`
+	Ro        bool   `json:"ro"`
+	Drv       string `json:"drv"`
+	Encrypted bool   `json:"encrypted,omitempty"`
+}
+
+// QMPBlockInfo represents block device info returned by query-block.
+type QMPBlockInfo struct {
+	Device    string            `json:"device"`
+	Qdev      string            `json:"qdev,omitempty"`
+	Type      string            `json:"type"`
+	Removable bool              `json:"removable"`
+	Locked    bool              `json:"locked"`
+	Inserted  *QMPBlockInserted `json:"inserted,omitempty"`
+}
+
+
 // QMPEvent represents an asynchronous event emitted by QEMU.
 type QMPEvent struct {
 	Event     string          `json:"event"`
@@ -279,6 +313,52 @@ func (c *QMPClient) QueryStatus() (*QMPStatusResult, error) {
 	return &status, nil
 }
 
+// QueryCPUs retrieves the virtual CPUs configured in the running QEMU guest.
+func (c *QMPClient) QueryCPUs() ([]QMPCPUInfo, error) {
+	raw, err := c.Execute("query-cpus-fast", nil)
+	if err != nil {
+		raw, err = c.Execute("query-cpus", nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var cpus []QMPCPUInfo
+	if err := json.Unmarshal(raw, &cpus); err != nil {
+		return nil, fmt.Errorf("failed to parse CPU query response: %w", err)
+	}
+	return cpus, nil
+}
+
+// QueryMemorySizeSummary queries the guest memory sizing details.
+func (c *QMPClient) QueryMemorySizeSummary() (*QMPMemorySummary, error) {
+	raw, err := c.Execute("query-memory-size-summary", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var mem QMPMemorySummary
+	if err := json.Unmarshal(raw, &mem); err != nil {
+		return nil, fmt.Errorf("failed to parse memory summary response: %w", err)
+	}
+	return &mem, nil
+}
+
+// QueryBlock retrieves the list of block devices and attached disk images.
+func (c *QMPClient) QueryBlock() ([]QMPBlockInfo, error) {
+	raw, err := c.Execute("query-block", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var blocks []QMPBlockInfo
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return nil, fmt.Errorf("failed to parse block device response: %w", err)
+	}
+	return blocks, nil
+}
+
+
 // SystemPowerdown triggers an ACPI powerdown event in the guest.
 func (c *QMPClient) SystemPowerdown() error {
 	_, err := c.Execute("system_powerdown", nil)
@@ -393,3 +473,46 @@ func QMPQuit(socketPath string, timeout time.Duration) error {
 
 	return client.Quit()
 }
+
+// QMPQueryCPUs executes query-cpus on the given socket.
+func QMPQueryCPUs(socketPath string, timeout time.Duration) ([]QMPCPUInfo, error) {
+	client := NewQMPClient(socketPath)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	return client.QueryCPUs()
+}
+
+// QMPQueryMemory executes query-memory-size-summary on the given socket.
+func QMPQueryMemory(socketPath string, timeout time.Duration) (*QMPMemorySummary, error) {
+	client := NewQMPClient(socketPath)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	return client.QueryMemorySizeSummary()
+}
+
+// QMPQueryBlock executes query-block on the given socket.
+func QMPQueryBlock(socketPath string, timeout time.Duration) ([]QMPBlockInfo, error) {
+	client := NewQMPClient(socketPath)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	return client.QueryBlock()
+}
+

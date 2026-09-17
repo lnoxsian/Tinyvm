@@ -15,6 +15,7 @@ import (
 
 	"tinyvm/internal/api"
 	"tinyvm/internal/config"
+	"tinyvm/internal/host"
 	"tinyvm/internal/qemu"
 	"tinyvm/internal/storage"
 	"tinyvm/internal/version"
@@ -331,11 +332,25 @@ func runRestart(args []string) {
 }
 
 func runDelete(args []string) {
+	var force bool
+	for _, arg := range args {
+		if arg == "-f" || arg == "--force" {
+			force = true
+		}
+	}
+
 	vmID, dataDir := parseVMIDAndDataDir("delete", args)
 	mgr, err := getManagerForDir(dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
+	}
+
+	if force && mgr.IsVMRunning(vmID) {
+		fmt.Printf("Force-stopping running virtual machine '%s'...\n", vmID)
+		if err := mgr.StopVM(vmID); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to force stop: %v\n", err)
+		}
 	}
 
 	fmt.Printf("Deleting virtual machine '%s'...\n", vmID)
@@ -346,6 +361,7 @@ func runDelete(args []string) {
 
 	fmt.Printf("VM '%s' deleted successfully.\n", vmID)
 }
+
 
 func runStatus(args []string) {
 	vmID, dataDir := parseVMIDAndDataDir("status", args)
@@ -524,6 +540,11 @@ func runISO(args []string) {
 
 
 func runQMP(args []string) {
+	if len(args) < 2 {
+		fmt.Println("Usage: tinyvm qmp <vm-id> <command> [json-arguments] [-data-dir path]")
+		os.Exit(1)
+	}
+
 	vmID, dataDir := parseVMIDAndDataDir("qmp", args)
 	mgr, err := getManagerForDir(dataDir)
 	if err != nil {
@@ -643,7 +664,26 @@ func runServe(args []string) {
 		os.Exit(1)
 	}
 
-	vmMgr := vm.NewManager(store, nil)
+	launcher, err := qemu.NewLauncher()
+	if err != nil {
+		logger.Error("Failed to initialize QEMU launcher", "err", err)
+		os.Exit(1)
+	}
+
+	kvmStatus := launcher.KVMStatus()
+	if kvmStatus.Available {
+		logger.Info("KVM acceleration enabled", "device", "/dev/kvm", "cpu_virtualization", kvmStatus.CPUSupport)
+	} else {
+		logger.Warn("KVM acceleration unavailable; falling back to software emulation (TCG)",
+			"device_exists", kvmStatus.DeviceExists,
+			"has_permission", kvmStatus.HasPermission,
+			"cpu_virtualization", kvmStatus.CPUSupport,
+			"err", kvmStatus.Error,
+		)
+		fmt.Fprintf(os.Stderr, "\n[WARNING] %s\n\n", host.KVMUnavailableNotice())
+	}
+
+	vmMgr := vm.NewManager(store, launcher)
 	if err := vmMgr.RecoverAll(); err != nil {
 		logger.Warn("Error reconciling VMs on startup", "err", err)
 	}
