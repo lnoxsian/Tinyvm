@@ -30,4 +30,27 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	// Health API
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
+
+	// REST API v1
+	mux.HandleFunc("GET /api/v1/vms", s.handleAPIVMsList)
+	mux.HandleFunc("POST /api/v1/vms", s.handleAPIVMCreate)
+	mux.HandleFunc("GET /api/v1/vms/{id}", s.handleAPIVMGet)
+	mux.HandleFunc("DELETE /api/v1/vms/{id}", s.handleAPIVMDelete)
+	mux.HandleFunc("POST /api/v1/vms/{id}/start", s.handleAPIVMStart)
+	mux.HandleFunc("POST /api/v1/vms/{id}/shutdown", s.handleAPIVMShutdown)
+	mux.HandleFunc("POST /api/v1/vms/{id}/restart", s.handleAPIVMRestart)
+	mux.HandleFunc("POST /api/v1/vms/{id}/stop", s.handleAPIVMStop)
+	mux.HandleFunc("POST /api/v1/vms/{id}/quit", s.handleAPIVMQuit)
+	mux.HandleFunc("GET /api/v1/vms/{id}/status", s.handleAPIVMStatus)
+	mux.HandleFunc("GET /api/v1/isos", s.handleAPIISOsList)
+
+	// Direct REST API Shorthands
+	mux.HandleFunc("POST /vms", s.handleAPIVMCreate)
+	mux.HandleFunc("DELETE /vms/{id}", s.handleAPIVMDelete)
+	mux.HandleFunc("POST /vms/{id}/start", s.handleAPIVMStart)
+	mux.HandleFunc("POST /vms/{id}/shutdown", s.handleAPIVMShutdown)
+	mux.HandleFunc("POST /vms/{id}/restart", s.handleAPIVMRestart)
+	mux.HandleFunc("POST /vms/{id}/stop", s.handleAPIVMStop)
+	mux.HandleFunc("POST /vms/{id}/quit", s.handleAPIVMQuit)
+	mux.HandleFunc("GET /vms/{id}/status", s.handleAPIVMStatus)
 }

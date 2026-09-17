@@ -23,6 +23,7 @@ const (
 	ErrCodeConflict        = "VM_STATE_CONFLICT"
 	ErrCodeInternal        = "INTERNAL_ERROR"
 	ErrCodeKVMUnavailable  = "KVM_UNAVAILABLE"
+	ErrCodeShutdownTimeout = "SHUTDOWN_TIMEOUT"
 )
 
 // WriteJSONError sends a structured JSON error response.
@@ -35,4 +36,11 @@ func WriteJSONError(w http.ResponseWriter, status int, code, message string) {
 			Message: message,
 		},
 	})
+}
+
+// writeJSON sends a structured JSON response with the specified status code.
+func writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
 }

@@ -1,17 +1,21 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
 	"tinyvm/internal/api"
 	"tinyvm/internal/config"
+	"tinyvm/internal/qemu"
 	"tinyvm/internal/storage"
 	"tinyvm/internal/version"
 	"tinyvm/internal/vm"
@@ -29,11 +33,13 @@ Commands:
   list        List all virtual machines
   create      Create a new virtual machine
   start       Start a virtual machine
-  shutdown    Gracefully shut down a virtual machine
-  stop        Force stop a virtual machine
+  shutdown    Gracefully shut down a virtual machine (ACPI via QMP)
+  stop        Force stop a virtual machine (SIGTERM/SIGKILL)
   restart     Restart a virtual machine
   delete      Delete a virtual machine and its storage
   status      Show the status of a virtual machine
+  qmp         Execute a QMP command against a running virtual machine
+  quit        Quit a running virtual machine cleanly via QMP
 
 Flags for 'serve':
   -listen string
@@ -109,6 +115,14 @@ func main() {
 
 	case "status":
 		runStatus(args[1:])
+		return
+
+	case "qmp":
+		runQMP(args[1:])
+		return
+
+	case "quit":
+		runQuit(args[1:])
 		return
 
 	default:
@@ -348,6 +362,9 @@ func runStatus(args []string) {
 	if st.Runtime.PID > 0 {
 		fmt.Printf("PID:          %d\n", st.Runtime.PID)
 		fmt.Printf("Uptime:       %s\n", st.Uptime)
+		if st.QMPStatus != "" {
+			fmt.Printf("QMP Guest:    %s\n", st.QMPStatus)
+		}
 	}
 	fmt.Printf("vCPUs:        %d\n", st.Config.CPUs)
 	fmt.Printf("Memory:       %d MB\n", st.Config.MemoryMB)
@@ -375,6 +392,87 @@ func runStatus(args []string) {
 	fmt.Printf("Log File:     %s\n", st.LogPath)
 	fmt.Printf("QMP Socket:   %s\n", st.QMPSockPath)
 	fmt.Printf("Console Sock: %s\n", st.ConsoleSockPath)
+}
+
+func runQuit(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("quit", args)
+	mgr, err := getManagerForDir(dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Sending QMP quit to virtual machine '%s'...\n", vmID)
+	if err := mgr.QuitVM(vmID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("VM '%s' quit cleanly via QMP.\n", vmID)
+}
+
+func runQMP(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("qmp", args)
+	mgr, err := getManagerForDir(dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	// Filter out -data-dir / --data-dir and extract positional arguments
+	var positional []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if (arg == "-data-dir" || arg == "--data-dir") && i+1 < len(args) {
+			i++
+			continue
+		}
+		if strings.HasPrefix(arg, "-data-dir=") || strings.HasPrefix(arg, "--data-dir=") {
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			positional = append(positional, arg)
+		}
+	}
+
+	if len(positional) < 2 {
+		fmt.Println("Usage: tinyvm qmp <vm-id> <command> [json-arguments] [-data-dir path]")
+		os.Exit(1)
+	}
+
+	qmpCmd := positional[1]
+	var jsonArgs string
+	if len(positional) >= 3 {
+		jsonArgs = positional[2]
+	}
+
+	vmDir, err := mgr.Storage().VMDir(vmID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	qmpSock := filepath.Join(vmDir, "qmp.sock")
+	var parsedArgs any
+	if jsonArgs != "" {
+		if err := json.Unmarshal([]byte(jsonArgs), &parsedArgs); err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing JSON arguments: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	res, err := qemu.QMPExecute(qmpSock, qmpCmd, parsedArgs, 3*time.Second)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "QMP Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, res, "", "  "); err == nil {
+		fmt.Println(prettyJSON.String())
+	} else {
+		fmt.Println(string(res))
+	}
 }
 
 func runList(args []string) {

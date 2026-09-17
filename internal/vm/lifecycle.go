@@ -23,6 +23,7 @@ type VMStatusInfo struct {
 	DiskActualBytes int64         `json:"disk_actual_bytes,omitempty"`
 	Firmware        string        `json:"firmware"`
 	EFIVarsPath     string        `json:"efi_vars_path,omitempty"`
+	QMPStatus       string        `json:"qmp_status,omitempty"`
 	LogPath         string        `json:"log_path"`
 	QMPSockPath     string        `json:"qmp_sock_path"`
 	ConsoleSockPath string        `json:"console_sock_path"`
@@ -157,6 +158,49 @@ func (m *Manager) stopVMLocked(id string) error {
 	return nil
 }
 
+// QuitVM instructs the QEMU process to quit immediately and cleanly via QMP.
+func (m *Manager) QuitVM(id string) error {
+	opLock := m.GetVMOpLock(id)
+	opLock.Lock()
+	defer opLock.Unlock()
+
+	m.mu.Lock()
+	vm, exists := m.vms[id]
+	if !exists {
+		m.mu.Unlock()
+		return ErrVMNotFoundInMgr
+	}
+
+	if vm.Runtime.State != StateRunning && vm.Runtime.State != StateStarting {
+		m.mu.Unlock()
+		return ErrVMNotRunning
+	}
+
+	vmDir, err := m.storage.VMDir(id)
+	if err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	qmpSock := filepath.Join(vmDir, "qmp.sock")
+
+	vm.Runtime.State = StateStopping
+	m.mu.Unlock()
+
+	// Send QMP quit
+	if err := qemu.QMPQuit(qmpSock, 2*time.Second); err != nil {
+		// Fallback to force stop if QMP quit fails
+		return m.stopVMLocked(id)
+	}
+
+	m.mu.Lock()
+	vm.Runtime.State = StateStopped
+	vm.Runtime.PID = 0
+	delete(m.processes, id)
+	m.mu.Unlock()
+
+	return nil
+}
+
 // ShutdownVM requests a graceful ACPI shutdown.
 func (m *Manager) ShutdownVM(id string) error {
 	opLock := m.GetVMOpLock(id)
@@ -184,19 +228,29 @@ func (m *Manager) ShutdownVM(id string) error {
 		return nil
 	}
 
+	vmDir, err := m.storage.VMDir(id)
+	if err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	qmpSock := filepath.Join(vmDir, "qmp.sock")
+
 	vm.Runtime.State = StateStopping
 	m.mu.Unlock()
 
-	if hasProc && proc != nil {
-		// In Phase 4, we request shutdown via graceful termination with 10s wait
-		// (Phase 5 wires QMP system_powerdown protocol command).
-		select {
-		case <-proc.ExitChan():
-			// Already exited
-		case <-time.After(100 * time.Millisecond):
+	// 1. Send ACPI system_powerdown via QMP
+	qmpErr := qemu.QMPSystemPowerdown(qmpSock, 2*time.Second)
+	if qmpErr != nil {
+		// Fallback to process signal if QMP socket was unreachable
+		if hasProc && proc != nil {
 			_ = proc.Signal(os.Interrupt)
+		} else if pid > 0 {
+			_ = syscall.Kill(pid, syscall.SIGINT)
 		}
+	}
 
+	// 2. Wait up to 15s for guest to cleanly power down and process to exit
+	if hasProc && proc != nil {
 		select {
 		case <-proc.ExitChan():
 			m.mu.Lock()
@@ -205,23 +259,21 @@ func (m *Manager) ShutdownVM(id string) error {
 			delete(m.processes, id)
 			m.mu.Unlock()
 			return nil
-		case <-time.After(10 * time.Second):
-			// Process did not exit gracefully in time
+		case <-time.After(15 * time.Second):
 			m.mu.Lock()
 			vm.Runtime.State = StateRunning
 			m.mu.Unlock()
 			return ErrShutdownTimeout
 		}
 	} else if pid > 0 {
-		_ = syscall.Kill(pid, syscall.SIGINT)
-		deadline := time.Now().Add(10 * time.Second)
+		deadline := time.Now().Add(15 * time.Second)
 		stopped := false
 		for time.Now().Before(deadline) {
 			if syscall.Kill(pid, 0) != nil {
 				stopped = true
 				break
 			}
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(150 * time.Millisecond)
 		}
 		if !stopped {
 			m.mu.Lock()
@@ -229,7 +281,6 @@ func (m *Manager) ShutdownVM(id string) error {
 			m.mu.Unlock()
 			return ErrShutdownTimeout
 		}
-		vmDir, _ := m.storage.VMDir(id)
 		qemu.CleanStaleArtifacts(qemu.QEMUPaths{
 			QMPSock:     filepath.Join(vmDir, "qmp.sock"),
 			ConsoleSock: filepath.Join(vmDir, "console.sock"),
@@ -304,6 +355,14 @@ func (m *Manager) StatusVM(id string) (*VMStatusInfo, error) {
 		efiVarsPath = filepath.Join(vmDir, "efivars.fd")
 	}
 
+	var qmpStatus string
+	if runtime.State == StateRunning {
+		qmpSock := filepath.Join(vmDir, "qmp.sock")
+		if res, err := qemu.QMPQueryStatus(qmpSock, 500*time.Millisecond); err == nil && res != nil {
+			qmpStatus = res.Status
+		}
+	}
+
 	return &VMStatusInfo{
 		Config:          cfg,
 		Runtime:         runtime,
@@ -311,6 +370,7 @@ func (m *Manager) StatusVM(id string) (*VMStatusInfo, error) {
 		DiskActualBytes: diskActualBytes,
 		Firmware:        cfg.Firmware,
 		EFIVarsPath:     efiVarsPath,
+		QMPStatus:       qmpStatus,
 		LogPath:         filepath.Join(vmDir, "logs", "qemu.log"),
 		QMPSockPath:     filepath.Join(vmDir, "qmp.sock"),
 		ConsoleSockPath: filepath.Join(vmDir, "console.sock"),

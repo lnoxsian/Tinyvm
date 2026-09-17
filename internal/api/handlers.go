@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 
 	"tinyvm/internal/version"
 )
@@ -140,6 +141,11 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVMsList(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		s.handleAPIVMsList(w, r)
+		return
+	}
+
 	views, _, _ := s.getVMCardViews()
 
 	data := DashboardPageData{
@@ -164,6 +170,11 @@ func (s *Server) handleVMCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		s.handleAPIVMGet(w, r)
+		return
+	}
+
 	data := BasePageData{
 		ActiveNav:  "vms",
 		Version:    version.Version,

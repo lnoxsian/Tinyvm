@@ -3,6 +3,7 @@ package vm
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestRestartAndShutdownVM(t *testing.T) {
@@ -132,3 +133,58 @@ func TestLifecycle_ConcurrencySafety(t *testing.T) {
 		t.Errorf("expected successful deletion of stopped VM, got %v", err)
 	}
 }
+
+func TestQMP_StatusAndQuitVM(t *testing.T) {
+	mgr, tmpDir := newTestManager(t)
+	defer os.RemoveAll(tmpDir)
+
+	if mgr.Launcher() == nil {
+		t.Skip("QEMU launcher not available, skipping test")
+	}
+
+	cfg := VMConfig{
+		ID:         "qmp-test-vm",
+		Name:       "QMP Test VM",
+		CPUs:       1,
+		MemoryMB:   256,
+		Disk:       "disk.qcow2",
+		DiskFormat: "qcow2",
+		DiskSize:   "10M",
+	}
+
+	if _, err := mgr.CreateVM(cfg); err != nil {
+		t.Fatalf("failed to create VM: %v", err)
+	}
+
+	// 1. Start VM
+	if err := mgr.StartVM("qmp-test-vm"); err != nil {
+		t.Fatalf("failed to start VM: %v", err)
+	}
+
+	// Give QEMU a brief moment to initialize sockets
+	time.Sleep(100 * time.Millisecond)
+
+	// 2. Query status via QMP
+	st, err := mgr.StatusVM("qmp-test-vm")
+	if err != nil {
+		t.Fatalf("failed to get status: %v", err)
+	}
+	if st.QMPStatus != "running" {
+		t.Errorf("expected QMP guest status 'running', got '%s'", st.QMPStatus)
+	}
+
+	// 3. Clean Quit via QMP
+	if err := mgr.QuitVM("qmp-test-vm"); err != nil {
+		t.Fatalf("failed to quit VM via QMP: %v", err)
+	}
+
+	if mgr.IsVMRunning("qmp-test-vm") {
+		t.Errorf("expected VM to be stopped after QMP quit")
+	}
+
+	// 4. Clean deletion
+	if err := mgr.DeleteVM("qmp-test-vm"); err != nil {
+		t.Fatalf("failed to delete VM: %v", err)
+	}
+}
+
