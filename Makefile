@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 BINARY_NAME := tinyvm
-VERSION ?= 0.1.0-dev
+VERSION ?= $(shell cat VERSION 2>/dev/null || echo 0.1.0-dev)
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
