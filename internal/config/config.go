@@ -17,6 +17,7 @@ type Config struct {
 	DataDir   string `json:"data_dir"`
 	LogLevel  string `json:"log_level"`
 	LogFormat string `json:"log_format"`
+	APIToken  string `json:"api_token,omitempty"`
 }
 
 // DefaultConfig returns a Config with standard defaults.
@@ -108,6 +109,9 @@ func Load(args []string) (*Config, *flag.FlagSet, error) {
 	if env := getEnv("TINYVM_LOG_FORMAT", "MINIVM_LOG_FORMAT"); env != "" {
 		cfg.LogFormat = env
 	}
+	if env := getEnv("TINYVM_API_TOKEN", "MINIVM_API_TOKEN"); env != "" {
+		cfg.APIToken = env
+	}
 
 	// FlagSet for CLI flags
 	fs := flag.NewFlagSet("tinyvm serve", flag.ContinueOnError)
@@ -116,6 +120,7 @@ func Load(args []string) (*Config, *flag.FlagSet, error) {
 	fs.StringVar(&cfg.DataDir, "data-dir", cfg.DataDir, "Base data directory")
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: debug, info, warn, error")
 	fs.StringVar(&cfg.LogFormat, "log-format", cfg.LogFormat, "Log format: text or json")
+	fs.StringVar(&cfg.APIToken, "api-token", cfg.APIToken, "API bearer authentication token (optional)")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, nil, err

@@ -53,4 +53,19 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /vms/{id}/stop", s.handleAPIVMStop)
 	mux.HandleFunc("POST /vms/{id}/quit", s.handleAPIVMQuit)
 	mux.HandleFunc("GET /vms/{id}/status", s.handleAPIVMStatus)
+
+	// Action endpoints supporting query string (?id=...) and JSON body ({"id": "..."})
+	mux.HandleFunc("POST /api/v1/start", s.handleAPIVMStart)
+	mux.HandleFunc("POST /api/v1/shutdown", s.handleAPIVMShutdown)
+	mux.HandleFunc("POST /api/v1/restart", s.handleAPIVMRestart)
+	mux.HandleFunc("POST /api/v1/stop", s.handleAPIVMStop)
+	mux.HandleFunc("POST /api/v1/quit", s.handleAPIVMQuit)
+	mux.HandleFunc("GET /api/v1/status", s.handleAPIVMStatus)
+
+	mux.HandleFunc("POST /start", s.handleAPIVMStart)
+	mux.HandleFunc("POST /shutdown", s.handleAPIVMShutdown)
+	mux.HandleFunc("POST /restart", s.handleAPIVMRestart)
+	mux.HandleFunc("POST /stop", s.handleAPIVMStop)
+	mux.HandleFunc("POST /quit", s.handleAPIVMQuit)
+	mux.HandleFunc("GET /status", s.handleAPIVMStatus)
 }

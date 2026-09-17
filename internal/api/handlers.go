@@ -141,7 +141,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVMsList(w http.ResponseWriter, r *http.Request) {
-	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/json") || (!strings.Contains(accept, "text/html") && r.Header.Get("HX-Request") == "") {
 		s.handleAPIVMsList(w, r)
 		return
 	}
@@ -170,7 +171,8 @@ func (s *Server) handleVMCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
-	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "application/json") || (!strings.Contains(accept, "text/html") && r.Header.Get("HX-Request") == "") {
 		s.handleAPIVMGet(w, r)
 		return
 	}

@@ -48,9 +48,16 @@ func NewServer(cfg *config.Config, logger *slog.Logger, vmMgr *vm.Manager) (*Ser
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
+	// Middleware pipeline: Panic Recovery -> Request Logging -> Security Headers -> Auth -> Mux
+	var handler http.Handler = mux
+	handler = s.AuthMiddleware(handler)
+	handler = s.SecurityHeadersMiddleware(handler)
+	handler = s.LoggingMiddleware(handler)
+	handler = s.PanicRecoveryMiddleware(handler)
+
 	s.httpServer = &http.Server{
 		Addr:           cfg.Addr(),
-		Handler:        mux,
+		Handler:        handler,
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   15 * time.Second,
 		IdleTimeout:    60 * time.Second,

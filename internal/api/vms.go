@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"tinyvm/internal/host"
@@ -24,6 +25,11 @@ type CreateVMRequest struct {
 	ISO        string           `json:"iso,omitempty"`
 	Firmware   string           `json:"firmware,omitempty"`
 	Network    vm.NetworkConfig `json:"network,omitempty"`
+}
+
+// VMActionRequest represents optional payload for action endpoints.
+type VMActionRequest struct {
+	ID string `json:"id"`
 }
 
 // VMResponse represents a VM in API responses.
@@ -75,6 +81,20 @@ func toVMResponse(v *vm.VM) VMResponse {
 		resp.StartedAt = &v.Runtime.StartedAt
 	}
 	return resp
+}
+
+// extractVMID retrieves VM ID from URL path, query params, form value, or JSON body.
+func (s *Server) extractVMID(r *http.Request) string {
+	if id := r.PathValue("id"); id != "" {
+		return id
+	}
+	if id := r.URL.Query().Get("id"); id != "" {
+		return id
+	}
+	if id := r.FormValue("id"); id != "" {
+		return id
+	}
+	return ""
 }
 
 // handleAPIVMsList handles GET /api/v1/vms
@@ -149,10 +169,12 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
 			return
 		}
+		s.logger.Error("Failed to create VM", "id", cfg.ID, "err", err)
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
 		return
 	}
 
+	s.logger.Info("Created virtual machine", "id", created.Config.ID, "name", created.Config.Name)
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/vms/%s", created.Config.ID))
 	writeJSON(w, http.StatusCreated, toVMResponse(created))
 }
@@ -164,7 +186,7 @@ func (s *Server) handleAPIVMGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := r.PathValue("id")
+	id := s.extractVMID(r)
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return
@@ -190,7 +212,7 @@ func (s *Server) handleAPIVMDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := r.PathValue("id")
+	id := s.extractVMID(r)
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return
@@ -205,10 +227,12 @@ func (s *Server) handleAPIVMDelete(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, "cannot delete running VM; stop it first")
 			return
 		}
+		s.logger.Error("Failed to delete VM", "id", id, "err", err)
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
 		return
 	}
 
+	s.logger.Info("Deleted virtual machine", "id", id)
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM deleted successfully",
 		ID:      id,
@@ -216,14 +240,20 @@ func (s *Server) handleAPIVMDelete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAPIVMStart handles POST /api/v1/vms/{id}/start
+// handleAPIVMStart handles POST /api/v1/vms/{id}/start and /start
 func (s *Server) handleAPIVMStart(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
 		return
 	}
 
-	id := r.PathValue("id")
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return
@@ -238,10 +268,17 @@ func (s *Server) handleAPIVMStart(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, "VM is already running")
 			return
 		}
+		if strings.Contains(err.Error(), "QEMU launcher is not configured") ||
+			strings.Contains(err.Error(), "qemu-system-x86_64 not found") {
+			WriteJSONError(w, http.StatusServiceUnavailable, ErrCodeKVMUnavailable, err.Error())
+			return
+		}
+		s.logger.Error("Failed to start VM", "id", id, "err", err)
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
 		return
 	}
 
+	s.logger.Info("Started virtual machine", "id", id)
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM started successfully",
 		ID:      id,
@@ -249,14 +286,20 @@ func (s *Server) handleAPIVMStart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAPIVMShutdown handles POST /api/v1/vms/{id}/shutdown
+// handleAPIVMShutdown handles POST /api/v1/vms/{id}/shutdown and /shutdown
 func (s *Server) handleAPIVMShutdown(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
 		return
 	}
 
-	id := r.PathValue("id")
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return
@@ -272,13 +315,16 @@ func (s *Server) handleAPIVMShutdown(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, vm.ErrShutdownTimeout) {
+			s.logger.Warn("VM shutdown timed out", "id", id)
 			WriteJSONError(w, http.StatusGatewayTimeout, ErrCodeShutdownTimeout, err.Error())
 			return
 		}
+		s.logger.Error("Failed to shut down VM", "id", id, "err", err)
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
 		return
 	}
 
+	s.logger.Info("Shut down virtual machine", "id", id)
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM shut down cleanly",
 		ID:      id,
@@ -286,14 +332,20 @@ func (s *Server) handleAPIVMShutdown(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAPIVMRestart handles POST /api/v1/vms/{id}/restart
+// handleAPIVMRestart handles POST /api/v1/vms/{id}/restart and /restart
 func (s *Server) handleAPIVMRestart(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
 		return
 	}
 
-	id := r.PathValue("id")
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return
@@ -304,10 +356,12 @@ func (s *Server) handleAPIVMRestart(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
 			return
 		}
+		s.logger.Error("Failed to restart VM", "id", id, "err", err)
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
 		return
 	}
 
+	s.logger.Info("Restarted virtual machine", "id", id)
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM restarted successfully",
 		ID:      id,
@@ -315,14 +369,20 @@ func (s *Server) handleAPIVMRestart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAPIVMStop handles POST /api/v1/vms/{id}/stop
+// handleAPIVMStop handles POST /api/v1/vms/{id}/stop and /stop
 func (s *Server) handleAPIVMStop(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
 		return
 	}
 
-	id := r.PathValue("id")
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return
@@ -337,10 +397,12 @@ func (s *Server) handleAPIVMStop(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, "VM is not running")
 			return
 		}
+		s.logger.Error("Failed to stop VM", "id", id, "err", err)
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
 		return
 	}
 
+	s.logger.Info("Stopped virtual machine", "id", id)
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM stopped successfully",
 		ID:      id,
@@ -348,14 +410,20 @@ func (s *Server) handleAPIVMStop(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAPIVMQuit handles POST /api/v1/vms/{id}/quit
+// handleAPIVMQuit handles POST /api/v1/vms/{id}/quit and /quit
 func (s *Server) handleAPIVMQuit(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
 		return
 	}
 
-	id := r.PathValue("id")
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return
@@ -370,10 +438,12 @@ func (s *Server) handleAPIVMQuit(w http.ResponseWriter, r *http.Request) {
 			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, "VM is not running")
 			return
 		}
+		s.logger.Error("Failed to quit VM", "id", id, "err", err)
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
 		return
 	}
 
+	s.logger.Info("Quit virtual machine via QMP", "id", id)
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM quit cleanly via QMP",
 		ID:      id,
@@ -381,14 +451,14 @@ func (s *Server) handleAPIVMQuit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleAPIVMStatus handles GET /api/v1/vms/{id}/status
+// handleAPIVMStatus handles GET /api/v1/vms/{id}/status and /status
 func (s *Server) handleAPIVMStatus(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
 		return
 	}
 
-	id := r.PathValue("id")
+	id := s.extractVMID(r)
 	if id == "" {
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
 		return

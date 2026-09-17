@@ -327,3 +327,118 @@ func TestAPISOs_List(t *testing.T) {
 		t.Errorf("expected positive ISO size, got %d", isos[0].SizeBytes)
 	}
 }
+
+func TestAPIVMs_QueryAndBodyActions(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create test VM
+	body, _ := json.Marshal(CreateVMRequest{
+		ID:         "action-vm",
+		Name:       "Action VM",
+		CPUs:       1,
+		MemoryMB:   256,
+		DiskSize:   "10M",
+		DiskFormat: "qcow2",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("failed to create VM: %d", rec.Code)
+	}
+
+	// 1. POST /start?id=action-vm (query parameter action)
+	req = httptest.NewRequest(http.MethodPost, "/start?id=action-vm", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /start?id=..., got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 2. GET /status?id=action-vm (query parameter status)
+	req = httptest.NewRequest(http.MethodGet, "/status?id=action-vm", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 on /status?id=..., got %d", rec.Code)
+	}
+
+	// 3. POST /stop with JSON body {"id": "action-vm"}
+	stopBody, _ := json.Marshal(VMActionRequest{ID: "action-vm"})
+	req = httptest.NewRequest(http.MethodPost, "/stop", bytes.NewReader(stopBody))
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 on /stop with body, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Clean up
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/vms/action-vm", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 on delete, got %d", rec.Code)
+	}
+}
+
+func TestAPI_AuthMiddleware(t *testing.T) {
+	srv := newTestServer(t)
+	srv.cfg.APIToken = "secret-token-123"
+
+	// 1. Health check works without token
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("health check should bypass auth, got %d", rec.Code)
+	}
+
+	// 2. /api/v1/vms without token -> 401 Unauthorized
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/vms", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 Unauthorized, got %d", rec.Code)
+	}
+
+	// 3. /api/v1/vms with invalid Bearer token -> 401 Unauthorized
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/vms", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for wrong token, got %d", rec.Code)
+	}
+
+	// 4. /api/v1/vms with valid Bearer token -> 200 OK
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/vms", nil)
+	req.Header.Set("Authorization", "Bearer secret-token-123")
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 with valid bearer token, got %d", rec.Code)
+	}
+
+	// 5. /api/v1/vms with valid query parameter token -> 200 OK
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/vms?token=secret-token-123", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 with query token, got %d", rec.Code)
+	}
+}
+
+func TestAPI_SecurityHeaders(t *testing.T) {
+	srv := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options: nosniff")
+	}
+	if rec.Header().Get("X-Frame-Options") != "SAMEORIGIN" {
+		t.Errorf("expected X-Frame-Options: SAMEORIGIN")
+	}
+}
