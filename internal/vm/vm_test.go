@@ -20,7 +20,7 @@ func newTestManager(t *testing.T) (*Manager, string) {
 		t.Fatalf("failed to initialize storage: %v", err)
 	}
 
-	mgr := NewManager(s)
+	mgr := NewManager(s, nil)
 	return mgr, tmpDir
 }
 
@@ -109,7 +109,7 @@ func TestCreateVM_WithoutStartingQEMU(t *testing.T) {
 	}
 
 	// Test VM Discovery / Recovery on startup
-	mgr2 := NewManager(mgr.Storage())
+	mgr2 := NewManager(mgr.Storage(), nil)
 	recovered, err := mgr2.GetVM("ubuntu-server")
 	if err != nil {
 		t.Fatalf("failed to discover VM after manager reload: %v", err)
@@ -128,6 +128,80 @@ func TestCreateVM_WithoutStartingQEMU(t *testing.T) {
 	}
 	if _, err := mgr.GetVM("ubuntu-server"); err != ErrVMNotFoundInMgr {
 		t.Errorf("expected ErrVMNotFoundInMgr, got %v", err)
+	}
+}
+
+// TestStartAndStopVM_WithQEMU starts a real VM using QEMU/KVM and verifies PID tracking and stopping.
+func TestStartAndStopVM_WithQEMU(t *testing.T) {
+	mgr, tmpDir := newTestManager(t)
+	defer os.RemoveAll(tmpDir)
+
+	if mgr.Launcher() == nil {
+		t.Skip("QEMU launcher not available, skipping live VM test")
+	}
+
+	cfg := VMConfig{
+		ID:         "live-qemu-test",
+		Name:       "Live QEMU Test VM",
+		CPUs:       1,
+		MemoryMB:   256,
+		Disk:       "disk.qcow2",
+		DiskFormat: "qcow2",
+		DiskSize:   "20M",
+	}
+
+	// 1. Create VM
+	vm, err := mgr.CreateVM(cfg)
+	if err != nil {
+		t.Fatalf("failed to create VM: %v", err)
+	}
+
+	// 2. Start VM
+	if err := mgr.StartVM("live-qemu-test"); err != nil {
+		t.Fatalf("failed to start VM: %v", err)
+	}
+
+	// 3. Verify process is tracked and running
+	if !mgr.IsVMRunning("live-qemu-test") {
+		t.Errorf("expected VM to be running")
+	}
+	if vm.Runtime.State != StateRunning {
+		t.Errorf("expected runtime state 'running', got '%s'", vm.Runtime.State)
+	}
+	if vm.Runtime.PID <= 0 {
+		t.Errorf("expected positive PID, got %d", vm.Runtime.PID)
+	}
+
+	// Verify duplicate start is rejected
+	if err := mgr.StartVM("live-qemu-test"); err != ErrVMAlreadyRunning {
+		t.Errorf("expected ErrVMAlreadyRunning, got %v", err)
+	}
+
+	// Verify log file was written
+	vmDir := filepath.Join(tmpDir, "vms", "live-qemu-test")
+	logPath := filepath.Join(vmDir, "logs", "qemu.log")
+	if _, err := os.Stat(logPath); err != nil {
+		t.Errorf("expected QEMU log file to exist at %s: %v", logPath, err)
+	}
+
+	// 4. Stop VM
+	if err := mgr.StopVM("live-qemu-test"); err != nil {
+		t.Fatalf("failed to stop VM: %v", err)
+	}
+
+	if mgr.IsVMRunning("live-qemu-test") {
+		t.Errorf("expected VM to be stopped")
+	}
+	if vm.Runtime.State != StateStopped {
+		t.Errorf("expected runtime state 'stopped', got '%s'", vm.Runtime.State)
+	}
+	if vm.Runtime.PID != 0 {
+		t.Errorf("expected PID 0 after stop, got %d", vm.Runtime.PID)
+	}
+
+	// 5. Clean deletion
+	if err := mgr.DeleteVM("live-qemu-test"); err != nil {
+		t.Fatalf("failed to delete stopped VM: %v", err)
 	}
 }
 

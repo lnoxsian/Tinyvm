@@ -28,7 +28,7 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("failed to initialize storage: %v", err)
 	}
 
-	vmMgr := vm.NewManager(s)
+	vmMgr := vm.NewManager(s, nil)
 	srv, err := NewServer(cfg, nil, vmMgr)
 	if err != nil {
 		t.Fatalf("failed to create server: %v", err)

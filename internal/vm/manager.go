@@ -6,30 +6,52 @@ import (
 	"path/filepath"
 	"sync"
 
+	"tinyvm/internal/qemu"
 	"tinyvm/internal/storage"
 )
 
 var (
-	ErrVMAlreadyRunning  = errors.New("cannot delete VM: VM is currently running")
+	ErrVMAlreadyRunning  = errors.New("cannot perform operation: VM is already running")
+	ErrVMNotRunning      = errors.New("cannot perform operation: VM is not running")
 	ErrVMNotFoundInMgr   = errors.New("VM not found")
 	ErrVMAlreadyExists   = errors.New("VM with this ID already exists")
 )
 
 // Manager coordinates in-memory VM states and lifecycle operations.
 type Manager struct {
-	mu      sync.RWMutex
-	storage *storage.Storage
-	vms     map[string]*VM
+	mu        sync.RWMutex
+	storage   *storage.Storage
+	launcher  *qemu.Launcher
+	vms       map[string]*VM
+	processes map[string]*qemu.Process
 }
 
 // NewManager creates and initializes a new VM Manager.
-func NewManager(s *storage.Storage) *Manager {
+func NewManager(s *storage.Storage, launcher *qemu.Launcher) *Manager {
+	if launcher == nil {
+		launcher, _ = qemu.NewLauncher()
+	}
+
 	m := &Manager{
-		storage: s,
-		vms:     make(map[string]*VM),
+		storage:   s,
+		launcher:  launcher,
+		vms:       make(map[string]*VM),
+		processes: make(map[string]*qemu.Process),
 	}
 	_ = m.DiscoverVMs()
 	return m
+}
+
+// Launcher returns the underlying QEMU launcher.
+func (m *Manager) Launcher() *qemu.Launcher {
+	return m.launcher
+}
+
+// SetLauncher sets the QEMU launcher (useful for tests or custom configurations).
+func (m *Manager) SetLauncher(l *qemu.Launcher) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.launcher = l
 }
 
 // Storage returns the underlying storage manager.

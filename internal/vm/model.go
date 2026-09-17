@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"tinyvm/internal/qemu"
 	"tinyvm/internal/storage"
 )
 
@@ -143,4 +144,31 @@ func (c *VMConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// ToQEMUConfig converts VMConfig into arguments configuration for QEMU.
+func (c *VMConfig) ToQEMUConfig() *qemu.Config {
+	var ports []qemu.PortForward
+	for _, p := range c.Network.Ports {
+		ports = append(ports, qemu.PortForward{
+			Host:     p.Host,
+			Guest:    p.Guest,
+			Protocol: p.Protocol,
+		})
+	}
+
+	return &qemu.Config{
+		ID:         c.ID,
+		CPUs:       c.CPUs,
+		MemoryMB:   c.MemoryMB,
+		Disk:       c.Disk,
+		DiskFormat: c.DiskFormat,
+		ISO:        c.ISO,
+		Network: qemu.NetworkConfig{
+			Enabled: c.Network.Enabled,
+			Mode:    c.Network.Mode,
+			SSHPort: c.Network.SSHPort,
+			Ports:   ports,
+		},
+	}
 }

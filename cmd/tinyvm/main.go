@@ -78,8 +78,32 @@ func main() {
 		runList(args[1:])
 		return
 
-	case "start", "stop", "shutdown", "status":
-		fmt.Printf("tinyvm %s: VM lifecycle manager will be connected in Phase 4.\n", cmd)
+	case "start":
+		if len(args) < 2 {
+			fmt.Println("Usage: tinyvm start <vm-id>")
+			os.Exit(1)
+		}
+		runStart(args[1])
+		return
+
+	case "stop":
+		if len(args) < 2 {
+			fmt.Println("Usage: tinyvm stop <vm-id>")
+			os.Exit(1)
+		}
+		runStop(args[1])
+		return
+
+	case "status":
+		if len(args) < 2 {
+			fmt.Println("Usage: tinyvm status <vm-id>")
+			os.Exit(1)
+		}
+		runStatus(args[1])
+		return
+
+	case "shutdown":
+		fmt.Println("tinyvm shutdown: QMP graceful ACPI shutdown will be connected in Phase 5. Use 'tinyvm stop' for force stop.")
 		return
 
 	default:
@@ -94,20 +118,85 @@ func main() {
 	}
 }
 
-func runList(args []string) {
+func getManager(args []string) (*vm.Manager, error) {
 	cfg, _, err := config.Load(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("error loading configuration: %w", err)
 	}
 
 	store, err := storage.New(cfg.DataDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error accessing storage: %v\n", err)
+		return nil, fmt.Errorf("error accessing storage: %w", err)
+	}
+
+	return vm.NewManager(store, nil), nil
+}
+
+func runStart(vmID string) {
+	mgr, err := getManager(nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
-	mgr := vm.NewManager(store)
+	fmt.Printf("Starting virtual machine '%s'...\n", vmID)
+	if err := mgr.StartVM(vmID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	v, _ := mgr.GetVM(vmID)
+	fmt.Printf("VM '%s' started successfully (PID: %d)\n", vmID, v.Runtime.PID)
+}
+
+func runStop(vmID string) {
+	mgr, err := getManager(nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Stopping virtual machine '%s'...\n", vmID)
+	if err := mgr.StopVM(vmID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("VM '%s' stopped successfully.\n", vmID)
+}
+
+func runStatus(vmID string) {
+	mgr, err := getManager(nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	v, err := mgr.GetVM(vmID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("VM:      %s\n", v.Config.Name)
+	fmt.Printf("ID:      %s\n", v.Config.ID)
+	fmt.Printf("Status:  %s\n", v.Runtime.State)
+	if v.Runtime.PID > 0 {
+		fmt.Printf("PID:     %d\n", v.Runtime.PID)
+		fmt.Printf("Uptime:  %s\n", time.Since(v.Runtime.StartedAt).Round(time.Second))
+	}
+	fmt.Printf("CPUs:    %d\n", v.Config.CPUs)
+	fmt.Printf("Memory:  %d MB\n", v.Config.MemoryMB)
+	fmt.Printf("Disk:    %s\n", v.Config.Disk)
+}
+
+func runList(args []string) {
+	mgr, err := getManager(args)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 	vms := mgr.ListVMs()
 	if len(vms) == 0 {
 		fmt.Println("No virtual machines found.")
@@ -146,7 +235,7 @@ func runServe(args []string) {
 		os.Exit(1)
 	}
 
-	vmMgr := vm.NewManager(store)
+	vmMgr := vm.NewManager(store, nil)
 
 	srv, err := api.NewServer(cfg, logger, vmMgr)
 	if err != nil {
