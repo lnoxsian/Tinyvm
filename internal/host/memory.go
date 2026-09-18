@@ -1,6 +1,7 @@
 package host
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -46,4 +47,24 @@ func GetMemoryInfo() MemoryInfo {
 		AvailableBytes: avail,
 		UsedBytes:      used,
 	}
+}
+
+// GetProcessRSSBytes returns the resident set size of a process in bytes from /proc/[pid]/statm.
+func GetProcessRSSBytes(pid int) uint64 {
+	if pid <= 0 {
+		return 0
+	}
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/statm", pid))
+	if err != nil {
+		return 0
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) < 2 {
+		return 0
+	}
+	pages, err := strconv.ParseUint(fields[1], 10, 64)
+	if err != nil {
+		return 0
+	}
+	return pages * uint64(os.Getpagesize())
 }

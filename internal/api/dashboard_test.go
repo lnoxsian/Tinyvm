@@ -23,6 +23,7 @@ func TestDashboard_HostStatsAndRendering(t *testing.T) {
 		DiskSize:   "10M",
 		DiskFormat: "qcow2",
 		Firmware:   "bios",
+		OSType:     "Linux",
 	})
 	if err != nil {
 		t.Fatalf("failed to create dummy VM: %v", err)
@@ -65,8 +66,14 @@ func TestDashboard_HostStatsAndRendering(t *testing.T) {
 	if !strings.Contains(body, "BIOS") {
 		t.Errorf("expected body to contain 'BIOS'")
 	}
+	if !strings.Contains(body, "Linux") {
+		t.Errorf("expected body to contain 'Linux' OSType badge")
+	}
 	if !strings.Contains(body, "1024 MB") {
 		t.Errorf("expected body to contain '1024 MB'")
+	}
+	if !strings.Contains(body, "Edit") {
+		t.Errorf("expected body to contain 'Edit' button")
 	}
 }
 
@@ -179,6 +186,9 @@ func TestDashboard_HTMXLifecycleActions(t *testing.T) {
 	}
 	if !strings.Contains(cardHTML, "Shutdown") {
 		t.Errorf("expected cardHTML to contain 'Shutdown' action button")
+	}
+	if !strings.Contains(cardHTML, "Force Stop") {
+		t.Errorf("expected cardHTML to contain 'Force Stop' action button")
 	}
 
 	// 2. Stop VM with HX-Request -> returns rendered VM card in stopped state

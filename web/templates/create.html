@@ -1,15 +1,402 @@
 {{ define "title" }}Create Virtual Machine - TinyVM{{ end }}
 
 {{ define "content" }}
-<div class="content-header">
-    <h1 class="content-title">Create Virtual Machine</h1>
-    <a href="/vms" class="btn">Cancel</a>
-</div>
+<div class="wizard-container">
+    <div class="content-header">
+        <div class="content-header-title">
+            <h1 class="content-title">Create Virtual Machine</h1>
+            <p class="content-subtitle">Configure and provision a new QEMU/KVM virtual machine</p>
+        </div>
+        <a href="/vms" class="btn btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            <span>Cancel</span>
+        </a>
+    </div>
 
-<div class="card" style="max-width: 600px;">
-    <p style="color: var(--text-muted); margin-bottom: 1rem;">
-        The VM Creation Wizard will be implemented in Phase 8.
-    </p>
-    <a href="/vms" class="btn">Back to VMs</a>
+    <!-- Stepper Navigation -->
+    <div class="wizard-stepper">
+        <div class="wizard-step active" id="step-nav-1" onclick="goToStep(1)">
+            <span class="wizard-step-circle">1</span>
+            <span class="wizard-step-title">General</span>
+        </div>
+        <div class="wizard-connector" id="step-connector-1"></div>
+        <div class="wizard-step" id="step-nav-2" onclick="goToStep(2)">
+            <span class="wizard-step-circle">2</span>
+            <span class="wizard-step-title">Resources</span>
+        </div>
+        <div class="wizard-connector" id="step-connector-2"></div>
+        <div class="wizard-step" id="step-nav-3" onclick="goToStep(3)">
+            <span class="wizard-step-circle">3</span>
+            <span class="wizard-step-title">Storage & Network</span>
+        </div>
+        <div class="wizard-connector" id="step-connector-3"></div>
+        <div class="wizard-step" id="step-nav-4" onclick="goToStep(4)">
+            <span class="wizard-step-circle">4</span>
+            <span class="wizard-step-title">Review</span>
+        </div>
+    </div>
+
+    <!-- Error Banner -->
+    <div id="wizard-error" class="alert alert-danger" style="display: none;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span id="wizard-error-text">An error occurred during VM creation</span>
+    </div>
+
+    <form id="vm-wizard-form" action="/vms" method="POST" hx-post="/vms" hx-target="#wizard-error" hx-swap="none">
+        <!-- ================= Step 1: General ================= -->
+        <div class="wizard-panel active" id="wizard-panel-1">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">1. General Information</span>
+                    <span class="form-hint">Identification & Operating System</span>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="vm-name">
+                            <span>VM Name <span style="color: var(--danger)">*</span></span>
+                        </label>
+                        <input type="text" id="vm-name" name="name" class="form-control" required 
+                               placeholder="e.g. ubuntu-server-01" 
+                               pattern="[a-zA-Z0-9][a-zA-Z0-9._ -]{0,63}"
+                               autocomplete="off" autofocus>
+                        <span class="form-hint">Unique display name (letters, numbers, dots, hyphens, up to 64 chars).</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="vm-id">
+                            <span>VM Identifier <span class="form-label-optional">(slug)</span></span>
+                        </label>
+                        <input type="text" id="vm-id" name="id" class="form-control" 
+                               placeholder="auto-generated from name"
+                               pattern="[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}">
+                        <span class="form-hint">Filesystem directory & socket identifier.</span>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="vm-os">Operating System</label>
+                        <select id="vm-os" name="os_type" class="form-control">
+                            <option value="Linux" selected>Linux (Generic)</option>
+                            <option value="Ubuntu">Ubuntu</option>
+                            <option value="Debian">Debian</option>
+                            <option value="Fedora">Fedora / RHEL</option>
+                            <option value="Alpine">Alpine Linux</option>
+                            <option value="Windows">Microsoft Windows</option>
+                            <option value="Other">Other OS</option>
+                        </select>
+                        <span class="form-hint">Used for display and optimal device profile selection.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="vm-iso">
+                            <span>Installation Media (ISO)</span>
+                            <a href="/storage" class="form-label-optional" style="text-decoration: underline;">+ Upload ISO</a>
+                        </label>
+                        <select id="vm-iso" name="iso" class="form-control">
+                            <option value="">None (Boot existing disk / PXE)</option>
+                            {{ range .ISOs }}
+                            <option value="{{ . }}">{{ . }}</option>
+                            {{ end }}
+                        </select>
+                        <span class="form-hint">ISO will be attached as virtual CD-ROM.</span>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 0.5rem;">
+                    <label class="form-label">Firmware Type</label>
+                    <div class="radio-card-group">
+                        <label class="radio-card selected" id="firmware-card-bios">
+                            <input type="radio" name="firmware" value="bios" checked onchange="updateFirmwareCards()">
+                            <span class="radio-card-title">SeaBIOS (Default)</span>
+                            <span class="radio-card-desc">Legacy x86 PC BIOS. Fast boot, robust compatibility across all OS distributions.</span>
+                        </label>
+                        <label class="radio-card {{ if not .HostUEFI }}disabled{{ end }}" id="firmware-card-uefi" style="{{ if not .HostUEFI }}opacity: 0.6; cursor: not-allowed;{{ end }}">
+                            <input type="radio" name="firmware" value="uefi" {{ if not .HostUEFI }}disabled{{ end }} onchange="updateFirmwareCards()">
+                            <span class="radio-card-title">UEFI (OVMF) {{ if not .HostUEFI }}<span style="font-size: 0.72rem; color: var(--danger);">(Host OVMF missing)</span>{{ end }}</span>
+                            <span class="radio-card-desc">Modern EFI firmware with NVRAM persistence. Required for Windows 11 & modern UEFI loaders.</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="wizard-footer">
+                    <a href="/vms" class="btn">Cancel</a>
+                    <button type="button" class="btn btn-primary" onclick="validateAndNext(1)">
+                        <span>Next: Resources</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= Step 2: Resources ================= -->
+        <div class="wizard-panel" id="wizard-panel-2">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">2. Compute Resources</span>
+                    <span class="form-hint">vCPU Cores & System Memory</span>
+                </div>
+
+                <div class="form-group">
+                    <div class="form-label">
+                        <span>Virtual CPU Cores (vCPU)</span>
+                        <span class="form-hint">Host available: {{ .HostCPUs }} cores</span>
+                    </div>
+                    <div class="range-input-group">
+                        <input type="range" id="cpu-slider" class="range-slider" min="1" max="{{ if gt .HostCPUs 1 }}{{ .HostCPUs }}{{ else }}4{{ end }}" value="2" oninput="syncCPU(this.value)">
+                        <input type="number" id="cpu-number" name="cpus" class="form-control range-number-box" min="1" max="256" value="2" oninput="syncCPU(this.value)">
+                    </div>
+                    <span class="form-hint">Allocated cores run with host CPU passthrough acceleration when KVM is active.</span>
+                </div>
+
+                <div class="form-group" style="margin-top: 1.5rem;">
+                    <div class="form-label">
+                        <span>Memory Allocation (RAM)</span>
+                        <span class="form-hint">Host total: {{ .HostMemoryMB }} MB</span>
+                    </div>
+                    <div class="range-input-group">
+                        <input type="range" id="ram-slider" class="range-slider" min="256" max="{{ if gt .HostMemoryMB 512 }}{{ .HostMemoryMB }}{{ else }}8192{{ end }}" step="256" value="2048" oninput="syncRAM(this.value)">
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            <input type="number" id="ram-number" name="memory_mb" class="form-control range-number-box" min="128" max="1048576" step="128" value="2048" oninput="syncRAM(this.value)">
+                            <span style="color: var(--text-muted); font-size: 0.85rem;">MB</span>
+                        </div>
+                    </div>
+                    <div class="preset-group">
+                        <button type="button" class="btn-preset" onclick="setRAMPreset(1024, this)">1 GB (1024 MB)</button>
+                        <button type="button" class="btn-preset active" onclick="setRAMPreset(2048, this)">2 GB (2048 MB)</button>
+                        <button type="button" class="btn-preset" onclick="setRAMPreset(4096, this)">4 GB (4096 MB)</button>
+                        <button type="button" class="btn-preset" onclick="setRAMPreset(8192, this)">8 GB (8192 MB)</button>
+                    </div>
+                </div>
+
+                <div class="wizard-footer">
+                    <button type="button" class="btn" onclick="goToStep(1)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        <span>Back: General</span>
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="validateAndNext(2)">
+                        <span>Next: Storage & Network</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= Step 3: Storage & Network ================= -->
+        <div class="wizard-panel" id="wizard-panel-3">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">3. Storage & Network Configuration</span>
+                    <span class="form-hint">Virtual Disk & Port Forwarding</span>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="vm-disk-size">Disk Size</label>
+                        <input type="text" id="vm-disk-size" name="disk_size" class="form-control" 
+                               value="20G" placeholder="e.g. 20G, 50G, 100G" required
+                               pattern="^[0-9]+[MGTmgt]?$">
+                        <div class="preset-group">
+                            <button type="button" class="btn-preset" onclick="setDiskPreset('10G')">10 GB</button>
+                            <button type="button" class="btn-preset active" onclick="setDiskPreset('20G')">20 GB</button>
+                            <button type="button" class="btn-preset" onclick="setDiskPreset('40G')">40 GB</button>
+                            <button type="button" class="btn-preset" onclick="setDiskPreset('80G')">80 GB</button>
+                        </div>
+                        <span class="form-hint">Size in Megabytes (M) or Gigabytes (G).</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="vm-disk-format">Disk Format</label>
+                        <select id="vm-disk-format" name="disk_format" class="form-control">
+                            <option value="qcow2" selected>QCOW2 (Recommended, Dynamic Expansion)</option>
+                            <option value="raw">RAW (Uncompressed Flat Image)</option>
+                        </select>
+                        <span class="form-hint">QCOW2 only consumes physical host disk space as data is written.</span>
+                    </div>
+                </div>
+
+                <hr style="border: 0; border-top: 1px solid var(--border-subtle); margin: 1.5rem 0;">
+
+                <div class="form-group">
+                    <div class="toggle-group">
+                        <div class="toggle-label-group">
+                            <span style="font-weight: 600; font-size: 0.9rem; color: var(--text);">Enable Network Interface</span>
+                            <span class="form-hint">User-mode SLIRP virtual NAT with host internet access.</span>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="vm-net-enable" name="enable_network" value="true" checked onchange="toggleNetworkFields(this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="network-fields">
+                    <div class="form-group">
+                        <label class="form-label" for="vm-ssh-port">
+                            <span>Host SSH Forward Port</span>
+                            <span class="form-label-optional">Host Port &rarr; Guest :22</span>
+                        </label>
+                        <input type="number" id="vm-ssh-port" name="ssh_port" class="form-control" 
+                               value="{{ .NextSSHPort }}" min="1" max="65535">
+                        <span class="form-hint">Connect to guest SSH via: <code id="ssh-preview-cmd">ssh user@localhost -p {{ .NextSSHPort }}</code></span>
+                    </div>
+                </div>
+
+                <div class="wizard-footer">
+                    <button type="button" class="btn" onclick="goToStep(2)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        <span>Back: Resources</span>
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="validateAndNext(3)">
+                        <span>Next: Review</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= Step 4: Review ================= -->
+        <div class="wizard-panel" id="wizard-panel-4">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">4. Review & Confirm</span>
+                    <span class="form-hint">Verify specifications before provisioning</span>
+                </div>
+
+                <div class="review-card">
+                    <div class="review-card-header">
+                        <div class="review-card-title">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <span>General Configuration</span>
+                        </div>
+                        <button type="button" class="btn btn-sm" onclick="goToStep(1)">Edit</button>
+                    </div>
+                    <div class="review-grid">
+                        <div class="review-item">
+                            <span class="review-label">Name</span>
+                            <span class="review-val" id="rev-name">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">Identifier</span>
+                            <span class="review-val" id="rev-id" style="font-family: var(--font-mono); font-size: 0.85rem;">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">Operating System</span>
+                            <span class="review-val" id="rev-os">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">Firmware</span>
+                            <span class="review-val" id="rev-firmware" style="text-transform: uppercase;">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">Attached ISO</span>
+                            <span class="review-val" id="rev-iso">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="review-card">
+                    <div class="review-card-header">
+                        <div class="review-card-title">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                                <rect x="9" y="9" width="6" height="6"></rect>
+                                <line x1="9" y1="1" x2="9" y2="4"></line>
+                                <line x1="15" y1="1" x2="15" y2="4"></line>
+                                <line x1="9" y1="20" x2="9" y2="23"></line>
+                                <line x1="15" y1="20" x2="15" y2="23"></line>
+                                <line x1="20" y1="9" x2="23" y2="9"></line>
+                                <line x1="20" y1="14" x2="23" y2="14"></line>
+                                <line x1="1" y1="9" x2="4" y2="9"></line>
+                                <line x1="1" y1="14" x2="4" y2="14"></line>
+                            </svg>
+                            <span>Resources & Hardware</span>
+                        </div>
+                        <button type="button" class="btn btn-sm" onclick="goToStep(2)">Edit</button>
+                    </div>
+                    <div class="review-grid">
+                        <div class="review-item">
+                            <span class="review-label">Virtual CPUs</span>
+                            <span class="review-val" id="rev-cpu">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">Memory</span>
+                            <span class="review-val" id="rev-ram">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="review-card">
+                    <div class="review-card-header">
+                        <div class="review-card-title">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                                <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
+                            </svg>
+                            <span>Storage & Networking</span>
+                        </div>
+                        <button type="button" class="btn btn-sm" onclick="goToStep(3)">Edit</button>
+                    </div>
+                    <div class="review-grid">
+                        <div class="review-item">
+                            <span class="review-label">Disk Capacity</span>
+                            <span class="review-val" id="rev-disk">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">Disk Format</span>
+                            <span class="review-val" id="rev-disk-format" style="text-transform: uppercase;">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">Networking</span>
+                            <span class="review-val" id="rev-net">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">SSH Forwarding</span>
+                            <span class="review-val" id="rev-ssh" style="font-family: var(--font-mono);">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wizard-footer">
+                    <button type="button" class="btn" onclick="goToStep(3)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                        <span>Back: Storage & Network</span>
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="btn-submit-wizard">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 5v14"></path>
+                            <path d="M5 12h14"></path>
+                        </svg>
+                        <span>Create Virtual Machine</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
 </div>
 {{ end }}

@@ -53,3 +53,17 @@ func TestKVMUnavailableNotice(t *testing.T) {
 		t.Errorf("expected notice to mention /dev/kvm")
 	}
 }
+
+func TestGetProcessRSSBytes(t *testing.T) {
+	// Current test runner process should have non-zero RSS on Linux
+	rss := GetProcessRSSBytes(os.Getpid())
+	if rss == 0 {
+		t.Logf("GetProcessRSSBytes returned 0 (non-Linux or permission restricted)")
+	} else {
+		t.Logf("Process %d RSS: %d bytes (%.2f MB)", os.Getpid(), rss, float64(rss)/(1024*1024))
+	}
+	// Invalid PID should safely return 0
+	if GetProcessRSSBytes(-1) != 0 {
+		t.Errorf("expected 0 RSS for PID -1")
+	}
+}

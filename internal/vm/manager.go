@@ -117,6 +117,35 @@ func (m *Manager) CreateVM(cfg VMConfig) (*VM, error) {
 		m.mu.Unlock()
 		return nil, ErrVMAlreadyExists
 	}
+
+	// Verify no host port collisions with other configured VMs
+	if cfg.Network.Enabled {
+		newPorts := make(map[int]bool)
+		if cfg.Network.SSHPort > 0 {
+			newPorts[cfg.Network.SSHPort] = true
+		}
+		for _, p := range cfg.Network.Ports {
+			if p.Host > 0 {
+				newPorts[p.Host] = true
+			}
+		}
+
+		for _, existing := range m.vms {
+			if !existing.Config.Network.Enabled {
+				continue
+			}
+			if existing.Config.Network.SSHPort > 0 && newPorts[existing.Config.Network.SSHPort] {
+				m.mu.Unlock()
+				return nil, fmt.Errorf("%w: port %d already used by VM %s", ErrDuplicatePort, existing.Config.Network.SSHPort, existing.Config.ID)
+			}
+			for _, ep := range existing.Config.Network.Ports {
+				if ep.Host > 0 && newPorts[ep.Host] {
+					m.mu.Unlock()
+					return nil, fmt.Errorf("%w: port %d already used by VM %s", ErrDuplicatePort, ep.Host, existing.Config.ID)
+				}
+			}
+		}
+	}
 	m.mu.Unlock()
 
 	// 1. Create VM directory and subfolders

@@ -13,6 +13,9 @@
                 <span>{{ .Status }}</span>
             </span>
             <span class="badge badge-subtle">{{ .Firmware }}</span>
+            {{ if .OSType }}
+            <span class="badge badge-subtle">{{ .OSType }}</span>
+            {{ end }}
             {{ if .ISO }}
             <span class="badge badge-subtle" title="Attached ISO: {{ .ISO }}">💿 ISO</span>
             {{ end }}
@@ -52,6 +55,12 @@
             <span class="vm-runtime-val">{{ .Uptime }}</span>
         </div>
         {{ end }}
+        {{ if .MemUsedMB }}
+        <div class="vm-runtime-item">
+            <span class="vm-runtime-label">RAM RSS:</span>
+            <span class="vm-runtime-val">{{ .MemUsedMB }} MB</span>
+        </div>
+        {{ end }}
     </div>
     {{ end }}
 
@@ -71,7 +80,7 @@
             Restart
         </button>
         <button class="btn btn-sm btn-danger" hx-post="/vms/{{ .ID }}/stop" hx-target="#vm-card-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Force terminate VM '{{ .Name }}'?">
-            Stop
+            Force Stop
         </button>
         <a href="/vms/{{ .ID }}" class="btn btn-sm">Details</a>
         {{ else }}
@@ -81,6 +90,7 @@
             </svg>
             <span>Start</span>
         </button>
+        <a href="/vms/{{ .ID }}" class="btn btn-sm">Edit</a>
         <a href="/vms/{{ .ID }}" class="btn btn-sm">Details</a>
         <button class="btn btn-sm btn-danger" hx-delete="/vms/{{ .ID }}" hx-target="#vm-card-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete VM '{{ .Name }}'?">
             Delete

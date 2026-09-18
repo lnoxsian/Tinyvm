@@ -67,6 +67,7 @@ type VMConfig struct {
 	DiskSize   string        `json:"disk_size,omitempty"`
 	ISO        string        `json:"iso,omitempty"`
 	Firmware   string        `json:"firmware,omitempty"` // "bios" or "uefi"
+	OSType     string        `json:"os_type,omitempty"`  // e.g. "Linux", "Debian", "Ubuntu", "Windows"
 	Network    NetworkConfig `json:"network"`
 }
 

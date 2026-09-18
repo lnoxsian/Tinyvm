@@ -47,10 +47,12 @@ type DashboardPageData struct {
 type VMCardView struct {
 	ID          string
 	Name        string
+	OSType      string
 	Status      string
 	StatusClass string
 	CPUs        int
 	MemoryMB    int
+	MemUsedMB   int
 	DiskSize    string
 	Firmware    string
 	ISO         string
@@ -58,6 +60,16 @@ type VMCardView struct {
 	Uptime      string
 	SSHPort     int
 	IsRunning   bool
+}
+
+// CreateVMPageData provides context and hardware boundaries for the VM Creation Wizard.
+type CreateVMPageData struct {
+	BasePageData
+	ISOs         []string
+	HostCPUs     int
+	HostMemoryMB int
+	HostUEFI     bool
+	NextSSHPort  int
 }
 
 // SettingsPageData provides data for the settings view.
@@ -142,13 +154,21 @@ func toVMCardView(v *vm.VM) VMCardView {
 		}
 	}
 
+	var memUsedMB int
+	if v.Runtime.State == vm.StateRunning && v.Runtime.PID > 0 {
+		rss := host.GetProcessRSSBytes(v.Runtime.PID)
+		memUsedMB = int(rss / (1024 * 1024))
+	}
+
 	return VMCardView{
 		ID:          v.Config.ID,
 		Name:        v.Config.Name,
+		OSType:      v.Config.OSType,
 		Status:      st,
 		StatusClass: st,
 		CPUs:        v.Config.CPUs,
 		MemoryMB:    v.Config.MemoryMB,
+		MemUsedMB:   memUsedMB,
 		DiskSize:    diskSize,
 		Firmware:    firmware,
 		ISO:         v.Config.ISO,
@@ -301,11 +321,59 @@ func (s *Server) handlePartialVMCard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVMCreate(w http.ResponseWriter, r *http.Request) {
-	data := BasePageData{
-		ActiveNav:  "vms",
-		Version:    version.Version,
-		HostOnline: true,
-		KVMEnabled: checkKVM(),
+	var isoNames []string
+	if s.vmMgr != nil && s.vmMgr.Storage() != nil {
+		if rawISOs, err := s.vmMgr.Storage().ListISOs(); err == nil {
+			for _, item := range rawISOs {
+				isoNames = append(isoNames, item.Name)
+			}
+		}
+	}
+
+	hostCPUs := host.GetCPUInfo().Count
+	if hostCPUs <= 0 {
+		hostCPUs = 1
+	}
+
+	hostMemInfo := host.GetMemoryInfo()
+	hostMemMB := int(hostMemInfo.TotalBytes / (1024 * 1024))
+	if hostMemMB <= 0 {
+		hostMemMB = 2048
+	}
+
+	uefiStatus := host.DetectUEFIFirmware()
+
+	// Calculate next available SSH port starting from 2222
+	nextPort := 2222
+	if s.vmMgr != nil {
+		usedPorts := make(map[int]bool)
+		for _, v := range s.vmMgr.ListVMs() {
+			if v.Config.Network.SSHPort > 0 {
+				usedPorts[v.Config.Network.SSHPort] = true
+			}
+			for _, p := range v.Config.Network.Ports {
+				if p.Host > 0 {
+					usedPorts[p.Host] = true
+				}
+			}
+		}
+		for usedPorts[nextPort] {
+			nextPort++
+		}
+	}
+
+	data := CreateVMPageData{
+		BasePageData: BasePageData{
+			ActiveNav:  "vms",
+			Version:    version.Version,
+			HostOnline: true,
+			KVMEnabled: checkKVM(),
+		},
+		ISOs:         isoNames,
+		HostCPUs:     hostCPUs,
+		HostMemoryMB: hostMemMB,
+		HostUEFI:     uefiStatus.Available,
+		NextSSHPort:  nextPort,
 	}
 	s.render(w, "create", data)
 }

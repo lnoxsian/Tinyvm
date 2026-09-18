@@ -20,6 +20,8 @@ import (
 type CreateVMRequest struct {
 	ID         string           `json:"id"`
 	Name       string           `json:"name"`
+	OSType     string           `json:"os_type,omitempty"`
+	OS         string           `json:"os,omitempty"`
 	CPUs       int              `json:"cpus"`
 	CPU        int              `json:"cpu,omitempty"`
 	MemoryMB   int              `json:"memory_mb"`
@@ -42,6 +44,7 @@ type VMActionRequest struct {
 type VMResponse struct {
 	ID         string           `json:"id"`
 	Name       string           `json:"name"`
+	OSType     string           `json:"os_type,omitempty"`
 	Status     string           `json:"status"`
 	CPUs       int              `json:"cpus"`
 	MemoryMB   int              `json:"memory_mb"`
@@ -72,6 +75,7 @@ func toVMResponse(v *vm.VM) VMResponse {
 	resp := VMResponse{
 		ID:         v.Config.ID,
 		Name:       v.Config.Name,
+		OSType:     v.Config.OSType,
 		Status:     string(v.Runtime.State),
 		CPUs:       v.Config.CPUs,
 		MemoryMB:   v.Config.MemoryMB,
@@ -129,13 +133,18 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 	contentType := r.Header.Get("Content-Type")
 	var req CreateVMRequest
 
-	if strings.HasPrefix(contentType, "application/x-www-form-urlencoded") || strings.HasPrefix(contentType, "multipart/form-data") {
+	isForm := strings.HasPrefix(contentType, "application/x-www-form-urlencoded") || strings.HasPrefix(contentType, "multipart/form-data")
+	if isForm {
 		if err := r.ParseForm(); err != nil {
 			WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "failed to parse form data: "+err.Error())
 			return
 		}
 		req.ID = strings.TrimSpace(r.FormValue("id"))
 		req.Name = strings.TrimSpace(r.FormValue("name"))
+		req.OSType = strings.TrimSpace(r.FormValue("os_type"))
+		if req.OSType == "" {
+			req.OSType = strings.TrimSpace(r.FormValue("os"))
+		}
 		if c, err := strconv.Atoi(r.FormValue("cpus")); err == nil && c > 0 {
 			req.CPUs = c
 		} else if c, err := strconv.Atoi(r.FormValue("cpu")); err == nil && c > 0 {
@@ -155,7 +164,15 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 		req.Firmware = strings.TrimSpace(r.FormValue("firmware"))
 		if p, err := strconv.Atoi(r.FormValue("ssh_port")); err == nil && p > 0 {
 			req.Network.SSHPort = p
-			req.Network.Enabled = true
+		}
+		if r.Form.Has("enable_network") {
+			v := r.FormValue("enable_network")
+			req.Network.Enabled = (v == "true" || v == "on" || v == "1")
+		} else {
+			// In an HTML form submission, unchecked checkbox sends nothing
+			req.Network.Enabled = false
+		}
+		if req.Network.Enabled {
 			req.Network.Mode = "user"
 		}
 	} else {
@@ -163,6 +180,9 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "malformed request payload: "+err.Error())
 			return
+		}
+		if req.OSType == "" && req.OS != "" {
+			req.OSType = req.OS
 		}
 	}
 
@@ -196,14 +216,18 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 	if req.Firmware == "" {
 		req.Firmware = "bios"
 	}
-	if !req.Network.Enabled && req.Network.SSHPort == 0 && len(req.Network.Ports) == 0 {
+	if !isForm && !req.Network.Enabled && req.Network.SSHPort == 0 && len(req.Network.Ports) == 0 {
 		req.Network.Enabled = true
+		req.Network.Mode = "user"
+	}
+	if req.Network.Enabled && req.Network.Mode == "" {
 		req.Network.Mode = "user"
 	}
 
 	cfg := vm.VMConfig{
 		ID:         req.ID,
 		Name:       req.Name,
+		OSType:     req.OSType,
 		CPUs:       req.CPUs,
 		MemoryMB:   req.MemoryMB,
 		Disk:       req.Disk,
@@ -245,6 +269,14 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 
 	s.logger.Info("Created virtual machine", "id", created.Config.ID, "name", created.Config.Name)
 
+	// HTMX client-side redirection
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", "/vms/"+created.Config.ID)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Browser form submission redirection
 	if strings.Contains(r.Header.Get("Accept"), "text/html") && !strings.Contains(r.Header.Get("Accept"), "application/json") {
 		http.Redirect(w, r, "/vms/"+created.Config.ID, http.StatusSeeOther)
 		return
