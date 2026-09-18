@@ -316,6 +316,13 @@ func (s *Server) handleAPIVMDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("Deleted virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM deleted successfully",
 		ID:      id,
@@ -362,6 +369,16 @@ func (s *Server) handleAPIVMStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("Started virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		if cardView, err := s.getSingleVMCardView(id); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("HX-Trigger", "vm-updated")
+			_ = s.templates["dashboard"].ExecuteTemplate(w, "vm-card", cardView)
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM started successfully",
 		ID:      id,
@@ -408,6 +425,16 @@ func (s *Server) handleAPIVMShutdown(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("Shut down virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		if cardView, err := s.getSingleVMCardView(id); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("HX-Trigger", "vm-updated")
+			_ = s.templates["dashboard"].ExecuteTemplate(w, "vm-card", cardView)
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM shut down cleanly",
 		ID:      id,
@@ -445,6 +472,16 @@ func (s *Server) handleAPIVMRestart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("Restarted virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		if cardView, err := s.getSingleVMCardView(id); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("HX-Trigger", "vm-updated")
+			_ = s.templates["dashboard"].ExecuteTemplate(w, "vm-card", cardView)
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM restarted successfully",
 		ID:      id,
@@ -486,6 +523,16 @@ func (s *Server) handleAPIVMStop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("Stopped virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		if cardView, err := s.getSingleVMCardView(id); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("HX-Trigger", "vm-updated")
+			_ = s.templates["dashboard"].ExecuteTemplate(w, "vm-card", cardView)
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, ActionResponse{
 		Message: "VM stopped successfully",
 		ID:      id,

@@ -25,6 +25,10 @@
                 <span class="brand-badge">{{ .Version }}</span>
             </a>
             <div class="header-status">
+                <span class="badge {{ if .KVMEnabled }}badge-kvm-active{{ else }}badge-kvm-disabled{{ end }}">
+                    <span class="badge-dot"></span>
+                    <span>{{ if .KVMEnabled }}KVM Acceleration{{ else }}TCG Emulated{{ end }}</span>
+                </span>
                 <span class="status-indicator">
                     <span class="status-dot {{ if .HostOnline }}online{{ else }}offline{{ end }}"></span>
                     <span>{{ if .HostOnline }}Host Online{{ else }}Host Offline{{ end }}</span>

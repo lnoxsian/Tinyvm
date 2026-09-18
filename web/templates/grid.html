@@ -1,0 +1,28 @@
+{{ define "vm-grid" }}
+<div class="vm-grid-container" id="vm-grid" hx-get="/partials/vms" hx-trigger="every 10s, vm-updated from:body" hx-swap="outerHTML">
+    {{ if .VMs }}
+    <div class="vm-grid">
+        {{ range .VMs }}
+            {{ template "vm-card" . }}
+        {{ end }}
+    </div>
+    {{ else }}
+    <div class="empty-state">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); margin-bottom: 1rem;">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" x2="16" y1="21" y2="21"/>
+            <line x1="12" x2="12" y1="17" y2="21"/>
+        </svg>
+        <h3>No Virtual Machines Configured</h3>
+        <p>Get started by creating your first virtual machine instance.</p>
+        <a href="/vms/new" class="btn btn-primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Create Your First VM</span>
+        </a>
+    </div>
+    {{ end }}
+</div>
+{{ end }}

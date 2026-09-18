@@ -35,10 +35,32 @@ func NewServer(cfg *config.Config, logger *slog.Logger, vmMgr *vm.Manager) (*Ser
 		vmMgr:     vmMgr,
 	}
 
-	// Parse web templates
+	funcMap := template.FuncMap{
+		"progressClass": func(pct int) string {
+			if pct > 85 {
+				return "danger"
+			}
+			if pct > 65 {
+				return "warning"
+			}
+			return "accent"
+		},
+		"formatFloat": func(f float64) string {
+			return fmt.Sprintf("%.1f", f)
+		},
+	}
+
+	// Parse web templates with shared modular components
 	pageTemplates := []string{"dashboard", "vm", "create", "console", "settings", "storage", "detail"}
 	for _, page := range pageTemplates {
-		tmpl, err := template.ParseFS(web.Files, "templates/layout.html", "templates/"+page+".html")
+		tmpl, err := template.New("layout.html").Funcs(funcMap).ParseFS(
+			web.Files,
+			"templates/layout.html",
+			"templates/card.html",
+			"templates/stats.html",
+			"templates/grid.html",
+			"templates/"+page+".html",
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse template %s: %w", page, err)
 		}

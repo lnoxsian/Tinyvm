@@ -1,0 +1,36 @@
+{{ define "stats-grid" }}
+<div class="stats-grid" id="stats-grid" hx-get="/partials/stats" hx-trigger="every 5s, vm-updated from:body" hx-swap="outerHTML">
+    <div class="stat-card">
+        <span class="stat-label">Virtual Machines</span>
+        <div class="stat-value">{{ .TotalVMs }}</div>
+        <div class="stat-meta">{{ .RunningVMs }} running &bull; {{ .StoppedVMs }} stopped</div>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Host CPU</span>
+        <div class="stat-value">{{ .CPUPercent }}%</div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill {{ progressClass .CPUPercent }}" style="width: {{ .CPUPercent }}%;"></div>
+        </div>
+        <div class="stat-meta">{{ .CPUCores }} Cores (KVM: {{ if .KVMEnabled }}Active{{ else }}Disabled{{ end }})</div>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Host Memory</span>
+        <div class="stat-value">{{ formatFloat .MemUsedGB }} / {{ formatFloat .MemTotalGB }} GB</div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill {{ progressClass .MemPercent }}" style="width: {{ .MemPercent }}%;"></div>
+        </div>
+        <div class="stat-meta">{{ .MemPercent }}% allocated</div>
+    </div>
+
+    <div class="stat-card">
+        <span class="stat-label">Storage</span>
+        <div class="stat-value">{{ formatFloat .DiskUsedGB }} / {{ formatFloat .DiskTotalGB }} GB</div>
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill {{ progressClass .DiskPercent }}" style="width: {{ .DiskPercent }}%;"></div>
+        </div>
+        <div class="stat-meta">{{ .DiskPercent }}% used on data root</div>
+    </div>
+</div>
+{{ end }}

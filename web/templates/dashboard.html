@@ -2,7 +2,10 @@
 
 {{ define "content" }}
 <div class="content-header">
-    <h1 class="content-title">Dashboard Overview</h1>
+    <div class="content-header-title">
+        <h1 class="content-title">Dashboard Overview</h1>
+        <p class="content-subtitle">Host system metrics and virtual machine manager</p>
+    </div>
     <a href="/vms/new" class="btn btn-primary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -13,87 +16,21 @@
 </div>
 
 <!-- Stats Grid -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <span class="stat-label">Virtual Machines</span>
-        <div class="stat-value">{{ .TotalVMs }}</div>
-        <div class="stat-meta">{{ .RunningVMs }} running &bull; {{ .StoppedVMs }} stopped</div>
-    </div>
-
-    <div class="stat-card">
-        <span class="stat-label">Host CPU</span>
-        <div class="stat-value">{{ .CPUPercent }}%</div>
-        <div class="progress-bar-bg">
-            <div class="progress-bar-fill accent" style="width: {{ .CPUPercent }}%;"></div>
-        </div>
-        <div class="stat-meta">{{ .CPUCores }} Cores (KVM: {{ if .KVMEnabled }}Active{{ else }}Disabled{{ end }})</div>
-    </div>
-
-    <div class="stat-card">
-        <span class="stat-label">Host Memory</span>
-        <div class="stat-value">{{ .MemUsedGB }} / {{ .MemTotalGB }} GB</div>
-        <div class="progress-bar-bg">
-            <div class="progress-bar-fill" style="width: {{ .MemPercent }}%;"></div>
-        </div>
-        <div class="stat-meta">{{ .MemPercent }}% allocated</div>
-    </div>
-
-    <div class="stat-card">
-        <span class="stat-label">Storage</span>
-        <div class="stat-value">{{ .DiskUsedGB }} / {{ .DiskTotalGB }} GB</div>
-        <div class="progress-bar-bg">
-            <div class="progress-bar-fill" style="width: {{ .DiskPercent }}%;"></div>
-        </div>
-        <div class="stat-meta">{{ .DiskPercent }}% used on data root</div>
-    </div>
-</div>
+{{ template "stats-grid" . }}
 
 <!-- Virtual Machines Section -->
-<div class="content-header" style="margin-top: 2rem;">
+<div class="content-header" style="margin-top: 2.25rem; margin-bottom: 1rem;">
     <h2 class="content-title" style="font-size: 1.1rem;">Virtual Machines</h2>
+    <div class="header-actions">
+        <button class="btn btn-sm" hx-get="/partials/vms" hx-target="#vm-grid" hx-swap="outerHTML" title="Refresh VM list">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+            <span>Refresh</span>
+        </button>
+    </div>
 </div>
 
-{{ if .VMs }}
-<div class="vm-grid">
-    {{ range .VMs }}
-    <div class="vm-card">
-        <div class="vm-card-header">
-            <span class="vm-name">{{ .Name }}</span>
-            <span class="badge {{ .StatusClass }}">{{ .Status }}</span>
-        </div>
-        <div class="vm-specs">
-            <div class="vm-spec-item">
-                <span class="vm-spec-label">vCPU</span>
-                <span class="vm-spec-val">{{ .CPUs }}</span>
-            </div>
-            <div class="vm-spec-item">
-                <span class="vm-spec-label">Memory</span>
-                <span class="vm-spec-val">{{ .MemoryMB }} MB</span>
-            </div>
-            <div class="vm-spec-item">
-                <span class="vm-spec-label">Disk</span>
-                <span class="vm-spec-val">{{ .DiskSize }}</span>
-            </div>
-        </div>
-        <div class="vm-actions">
-            {{ if eq .Status "running" }}
-            <a href="/vms/{{ .ID }}/console" class="btn btn-sm">Console</a>
-            <button class="btn btn-sm" hx-post="/api/v1/vms/{{ .ID }}/shutdown">Shutdown</button>
-            <button class="btn btn-sm btn-danger" hx-post="/api/v1/vms/{{ .ID }}/stop">Stop</button>
-            {{ else }}
-            <button class="btn btn-sm btn-primary" hx-post="/api/v1/vms/{{ .ID }}/start">Start</button>
-            <a href="/vms/{{ .ID }}" class="btn btn-sm">Edit</a>
-            <button class="btn btn-sm btn-danger" hx-delete="/api/v1/vms/{{ .ID }}">Delete</button>
-            {{ end }}
-        </div>
-    </div>
-    {{ end }}
-</div>
-{{ else }}
-<div class="empty-state">
-    <h3>No Virtual Machines</h3>
-    <p>Get started by creating your first virtual machine instance.</p>
-    <a href="/vms/new" class="btn btn-primary">Create Your First VM</a>
-</div>
-{{ end }}
+{{ template "vm-grid" . }}
 {{ end }}

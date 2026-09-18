@@ -29,6 +29,11 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /storage/upload", s.handleStorageUpload)
 	mux.HandleFunc("GET /settings", s.handleSettings)
 
+	// HTMX Partials
+	mux.HandleFunc("GET /partials/stats", s.handlePartialStats)
+	mux.HandleFunc("GET /partials/vms", s.handlePartialVMs)
+	mux.HandleFunc("GET /partials/vms/{id}", s.handlePartialVMCard)
+
 	// Health API
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 
