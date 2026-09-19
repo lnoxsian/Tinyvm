@@ -775,6 +775,13 @@ func (s *Server) handleAPIISODelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.Info("Deleted ISO image", "name", name)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "iso-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": fmt.Sprintf("ISO '%s' deleted successfully", name),
 	})

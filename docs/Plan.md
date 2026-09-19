@@ -484,6 +484,7 @@ Use:
 │   │   ├── disk.qcow2
 │   │   ├── qmp.sock
 │   │   ├── console.sock
+│   │   ├── vnc.sock
 │   │   └── logs/
 │   │
 │   └── debian-test/
@@ -491,6 +492,7 @@ Use:
 │       ├── disk.qcow2
 │       ├── qmp.sock
 │       ├── console.sock
+│       ├── vnc.sock
 │       └── logs/
 │
 └── iso/
@@ -627,7 +629,8 @@ qemu-system-x86_64 \
     -netdev user,id=net0,hostfwd=tcp::2222-:22 \
     -qmp unix:qmp.sock,server=on,wait=off \
     -serial unix:console.sock,server=on,wait=off \
-    -display none
+    -vga virtio \
+    -vnc unix:vnc.sock
 ```
 
 Arguments must be generated programmatically.
@@ -784,12 +787,13 @@ The browser console should interact with the actual VM serial console.
 
 ---
 
-# 23. WebSocket Console
+# 23. WebSocket Console & Graphical Display
 
-Endpoint:
+Endpoints:
 
 ```text
-WS /api/v1/vms/{id}/console
+WS /api/v1/vms/{id}/console   (Text / Serial console via xterm.js)
+WS /api/v1/vms/{id}/vnc       (Graphical display via embedded noVNC)
 ```
 
 Implement:
@@ -802,9 +806,17 @@ disconnect
 resize
 ```
 
-If using xterm.js, support terminal resizing where possible.
+### Serial Console (xterm.js)
+* Bridges `WS /api/v1/vms/{id}/console` ↔ `console.sock`
+* Interactive text-based serial stream.
+* If using xterm.js, support terminal resizing where possible.
+* Do not load xterm.js on pages that do not use the console.
 
-Do not load xterm.js on pages that do not use the console.
+### Graphical Display (Embedded noVNC)
+* Bridges `WS /api/v1/vms/{id}/vnc` ↔ `vnc.sock` (RFB stream over WebSocket)
+* Embed noVNC client assets into the single binary (under `web/vendor/novnc/`) with zero external runtime proxies (e.g. no external websockify daemon needed).
+* Full graphical frame interaction with keyboard, mouse pointer, and resolution scaling.
+* Support switching between Graphical (noVNC) and Serial (xterm.js) on `/vms/{id}/console`.
 
 ---
 
@@ -970,7 +982,8 @@ web/
 │
 └── vendor/
     ├── htmx.min.js
-    └── xterm/
+    ├── xterm/
+    └── novnc/
 ```
 
 Pin frontend dependency versions.
@@ -2169,18 +2182,40 @@ review
 
 ---
 
-## Phase 9 — Browser Console
+## Phase 9 — Browser Console & Graphical Display
 
 Implement:
 
 ```text
-QEMU serial socket
-WebSocket bridge
-xterm.js
-console page
-fullscreen
-connection state
+QEMU serial socket (console.sock)
+QEMU VNC socket (vnc.sock via -vnc unix:vnc.sock)
+WebSocket bridge (Serial console & VNC RFB streams in pure Go)
+Embedded noVNC into binary (web/vendor/novnc/ via web/embed.go)
+xterm.js integration (web/vendor/xterm/)
+Dual-mode console page (/vms/{id}/console with Graphical VNC & Serial xterm)
+Fullscreen toggle
+Connection state & auto-reconnect
 ```
+
+### Architecture & Implementation Steps:
+
+1. **QEMU VNC UNIX Domain Socket**:
+   - Add `-vga virtio -vnc unix:<vm-storage-dir>/vnc.sock` to QEMU argument builder.
+   - Clean, secure local socket communication without opening unauthenticated host TCP ports.
+
+2. **Native Go WebSocket Bridge (Zero External Dependencies)**:
+   - Implement WebSocket upgrade and RFC 6455 framing in `internal/websocket`.
+   - `WS /api/v1/vms/{id}/vnc`: Bi-directional bridge between WebSocket binary messages and QEMU's `vnc.sock` (RFB protocol over WebSocket), replacing the need for external tools like `websockify`.
+   - `WS /api/v1/vms/{id}/console`: Bi-directional bridge between WebSocket text/binary messages and QEMU's `console.sock` for serial text console.
+
+3. **Embedded noVNC Client**:
+   - Place noVNC web assets under `web/vendor/novnc/`.
+   - Embed into the single Go binary using Go 1.16+ `//go:embed` in `web/embed.go`.
+   - 100% offline and self-contained; no CDN or external internet required.
+
+4. **Interactive Console UI (`/vms/{id}/console`)**:
+   - Switchable view tabs: **Graphical Console (noVNC)** and **Serial Console (xterm.js)**.
+   - Fullscreen mode, keyboard/mouse capture, status indicator (`Connected`, `Connecting`, `Disconnected`), and disconnect/reconnect controls.
 
 ---
 

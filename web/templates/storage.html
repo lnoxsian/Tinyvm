@@ -14,7 +14,7 @@
     <div class="stat-card">
         <span class="stat-label">ISO Directory</span>
         <div class="stat-value" style="font-size: 1.25rem; font-family: monospace;">{{ .ISODir }}</div>
-        <div class="stat-meta">{{ len .ISOs }} ISO images discovered</div>
+        <div class="stat-meta" id="iso-stat-count">{{ len .ISOs }} ISO images discovered</div>
     </div>
 </div>
 
@@ -23,7 +23,7 @@
 </div>
 
 {{ if .ISOs }}
-<div class="card" style="padding: 0; overflow: hidden;">
+<div class="card" style="padding: 0; overflow: hidden;" id="iso-card-container">
     <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
         <thead>
             <tr style="border-bottom: 1px solid var(--border); background-color: rgba(255, 255, 255, 0.02);">
@@ -33,9 +33,9 @@
                 <th style="padding: 0.75rem 1rem; text-align: right;">Action</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="iso-table-body">
             {{ range .ISOs }}
-            <tr style="border-bottom: 1px solid var(--border);">
+            <tr id="iso-row-{{ .Name }}" style="border-bottom: 1px solid var(--border);">
                 <td style="padding: 0.75rem 1rem; font-weight: 500;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
@@ -50,7 +50,7 @@
                 <td style="padding: 0.75rem 1rem; text-align: right;">
                     <button class="btn btn-sm btn-outline-danger"
                             hx-delete="/api/v1/isos/{{ .Name }}"
-                            hx-confirm="Are you sure you want to delete {{ .Name }}?"
+                            hx-confirm="Are you sure you want to delete '{{ .Name }}' from the storage pool?"
                             hx-target="closest tr"
                             hx-swap="outerHTML">
                         Delete
@@ -62,7 +62,7 @@
     </table>
 </div>
 {{ else }}
-<div class="empty-state card">
+<div class="empty-state card" id="iso-card-container">
     <h3>No ISO Images Found</h3>
     <p style="color: var(--text-muted);">Place your installation ISOs in <code>{{ .ISODir }}</code> or upload one below to attach them to virtual machines.</p>
 </div>

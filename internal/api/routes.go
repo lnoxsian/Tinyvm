@@ -16,7 +16,12 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	vendorFS, err := fs.Sub(web.Files, "vendor")
 	if err == nil {
-		mux.Handle("GET /vendor/", http.StripPrefix("/vendor/", http.FileServer(http.FS(vendorFS))))
+		vendorHandler := http.StripPrefix("/vendor/", http.FileServer(http.FS(vendorFS)))
+		// Per noVNC EMBEDDING.md: tell browsers to revalidate vendor assets using conditional requests to avoid cache mismatch
+		mux.Handle("GET /vendor/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-cache")
+			vendorHandler.ServeHTTP(w, r)
+		}))
 	}
 
 	// Web UI Pages
@@ -25,6 +30,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /vms/new", s.handleVMCreate)
 	mux.HandleFunc("GET /vms/{id}", s.handleVMDetail)
 	mux.HandleFunc("GET /vms/{id}/console", s.handleVMConsole)
+	mux.HandleFunc("GET /vms/{id}/novnc", s.handleVMNoVNCApp)
 	mux.HandleFunc("GET /storage", s.handleStorage)
 	mux.HandleFunc("POST /storage/upload", s.handleStorageUpload)
 	mux.HandleFunc("GET /settings", s.handleSettings)
@@ -51,6 +57,15 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/isos", s.handleAPIISOsList)
 	mux.HandleFunc("POST /api/v1/isos", s.handleAPIISOUpload)
 	mux.HandleFunc("DELETE /api/v1/isos/{name}", s.handleAPIISODelete)
+
+	// WebSockets (Serial Console & Graphical VNC RFB stream & SSH/Shell PTY)
+	mux.HandleFunc("GET /api/v1/vms/{id}/console", s.handleAPIVMConsoleWS)
+	mux.HandleFunc("GET /api/v1/vms/{id}/vnc", s.handleAPIVMVncWS)
+	mux.HandleFunc("GET /api/v1/vms/{id}/ssh", s.handleAPIVMSSHWS)
+	mux.HandleFunc("GET /vms/{id}/ws/console", s.handleAPIVMConsoleWS)
+	mux.HandleFunc("GET /vms/{id}/ws/vnc", s.handleAPIVMVncWS)
+	mux.HandleFunc("GET /vms/{id}/ws/ssh", s.handleAPIVMSSHWS)
+	mux.HandleFunc("GET /vms/{id}/vnc", s.handleAPIVMVncWS)
 
 	// Direct REST API Shorthands
 	mux.HandleFunc("POST /vms", s.handleAPIVMCreate)

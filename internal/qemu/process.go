@@ -45,6 +45,9 @@ type Process struct {
 func CleanStaleArtifacts(paths QEMUPaths) {
 	_ = os.Remove(paths.QMPSock)
 	_ = os.Remove(paths.ConsoleSock)
+	if paths.VNCSock != "" {
+		_ = os.Remove(paths.VNCSock)
+	}
 	_ = os.Remove(paths.PIDFile)
 }
 

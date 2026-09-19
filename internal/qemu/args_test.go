@@ -90,9 +90,23 @@ func TestBuildArgs_WithKVM(t *testing.T) {
 		t.Errorf("expected console.sock serial socket, got %s", serial)
 	}
 
-	disp, ok := findArg(args, "-display")
+	vga, ok := findArg(args, "-vga")
+	if !ok || vga != "virtio" {
+		t.Errorf("expected -vga virtio, got %s", vga)
+	}
+
+	vnc, ok := findArg(args, "-vnc")
+	if !ok || !strings.Contains(vnc, "vnc.sock") {
+		t.Errorf("expected -vnc unix:.../vnc.sock, got %s", vnc)
+	}
+
+	// Verify headless fallback when VNCSock is disabled
+	pathsNoVNC := paths
+	pathsNoVNC.VNCSock = ""
+	argsNoVNC := BuildArgs(cfg, pathsNoVNC, true)
+	disp, ok := findArg(argsNoVNC, "-display")
 	if !ok || disp != "none" {
-		t.Errorf("expected -display none, got %s", disp)
+		t.Errorf("expected -display none when VNCSock is empty, got %s", disp)
 	}
 }
 

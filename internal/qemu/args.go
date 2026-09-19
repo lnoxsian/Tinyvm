@@ -45,6 +45,7 @@ type QEMUPaths struct {
 	EFIVars     string
 	QMPSock     string
 	ConsoleSock string
+	VNCSock     string
 	PIDFile     string
 }
 
@@ -68,6 +69,7 @@ func BuildPaths(vmDir string, isoDir string, cfg *Config) QEMUPaths {
 		EFIVars:     filepath.Join(vmDir, "efivars.fd"),
 		QMPSock:     filepath.Join(vmDir, "qmp.sock"),
 		ConsoleSock: filepath.Join(vmDir, "console.sock"),
+		VNCSock:     filepath.Join(vmDir, "vnc.sock"),
 		PIDFile:     filepath.Join(vmDir, "qemu.pid"),
 	}
 }
@@ -159,11 +161,18 @@ func BuildArgs(cfg *Config, paths QEMUPaths, useKVM bool) []string {
 	// 7. Serial Console Socket
 	args = append(args, "-serial", fmt.Sprintf("unix:%s,server=on,wait=off", paths.ConsoleSock))
 
-	// 8. Display & PID File
-	args = append(args,
-		"-display", "none",
-		"-pidfile", paths.PIDFile,
-	)
+	// 8. Graphical Display / VNC Socket
+	if paths.VNCSock != "" {
+		args = append(args,
+			"-vga", "virtio",
+			"-vnc", fmt.Sprintf("unix:%s", paths.VNCSock),
+		)
+	} else {
+		args = append(args, "-display", "none")
+	}
+
+	// 9. PID File
+	args = append(args, "-pidfile", paths.PIDFile)
 
 	return args
 }

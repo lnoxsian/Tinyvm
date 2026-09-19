@@ -28,13 +28,78 @@ document.addEventListener("DOMContentLoaded", () => {
             wizardErr.style.display = "flex";
             wizardErr.scrollIntoView({ behavior: "smooth", block: "center" });
         } else {
-            alert(msg);
+            showToast(msg, "error");
+        }
+    });
+
+    // Handle toast notification events dispatched by HTMX HX-Trigger
+    document.body.addEventListener("show-toast", (evt) => {
+        const data = evt.detail;
+        if (typeof data === "string") {
+            showToast(data, "success");
+        } else if (data && data.message) {
+            showToast(data.message, data.type || "success");
+        }
+    });
+
+    // ISO updated event handler for dynamic list count & empty state
+    document.body.addEventListener("iso-updated", () => {
+        showToast("ISO image deleted successfully", "success");
+        const tbody = document.getElementById("iso-table-body");
+        if (!tbody) return;
+        const remaining = tbody.querySelectorAll("tr").length;
+        const countMeta = document.getElementById("iso-stat-count");
+        if (countMeta) {
+            countMeta.textContent = `${remaining} ISO image${remaining === 1 ? '' : 's'} discovered`;
+        }
+        if (remaining === 0) {
+            const cardContainer = document.getElementById("iso-card-container");
+            if (cardContainer) {
+                cardContainer.outerHTML = `
+                    <div class="empty-state card" id="iso-card-container">
+                        <h3>No ISO Images Found</h3>
+                        <p style="color: var(--text-muted);">Place your installation ISOs in the ISO directory or upload one below to attach them to virtual machines.</p>
+                    </div>`;
+            }
         }
     });
 
     // Initialize VM Creation Wizard if present
     initCreateVMWizard();
 });
+
+// Floating toast notification system
+function showToast(message, type = "success") {
+    let container = document.getElementById("toast-container");
+    if (!container) {
+        container = document.createElement("div");
+        container.id = "toast-container";
+        container.className = "toast-container";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+
+    let iconSvg = "";
+    if (type === "success") {
+        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+    } else if (type === "error") {
+        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+    } else {
+        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+    }
+
+    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => toast.classList.add("show"));
+
+    setTimeout(() => {
+        toast.classList.remove("show");
+        setTimeout(() => toast.remove(), 250);
+    }, 3500);
+}
 
 /* ==========================================================================
    VM Creation Wizard Handlers (Phase 8)

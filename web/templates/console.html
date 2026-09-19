@@ -1,14 +1,164 @@
-{{ define "title" }}VM Console - TinyVM{{ end }}
+{{ define "title" }}Console: {{ .VM.Config.Name }} - TinyVM{{ end }}
 
 {{ define "content" }}
-<div class="content-header">
-    <h1 class="content-title">Console</h1>
-    <a href="/vms" class="btn">Back</a>
-</div>
+<div class="console-page">
+    <div class="content-header" style="margin-bottom: 0.75rem;">
+        <div class="content-header-title">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <h1 class="content-title" style="margin: 0;">{{ .VM.Config.Name }}</h1>
+                <span class="badge {{ if eq .VM.Runtime.State "running" }}badge-running{{ else }}badge-stopped{{ end }}">
+                    <span class="badge-dot"></span>
+                    <span>{{ .VM.Runtime.State }}</span>
+                </span>
+                {{ if .VM.Config.OSType }}
+                <span class="badge badge-subtle">{{ .VM.Config.OSType }}</span>
+                {{ end }}
+                <span class="badge badge-subtle">{{ if .VM.Config.Firmware }}{{ .VM.Config.Firmware }}{{ else }}BIOS{{ end }}</span>
+            </div>
+            <p class="content-subtitle" style="margin: 0.25rem 0 0 0;">
+                Virtual machine console &bull; ID: <code>{{ .VM.Config.ID }}</code>
+                {{ if eq .VM.Runtime.State "running" }}
+                &bull; PID: {{ .VM.Runtime.PID }}
+                {{ end }}
+            </p>
+        </div>
+        <div class="header-actions">
+            {{ if eq .VM.Runtime.State "running" }}
+            <a href="/vms/{{ .VM.Config.ID }}/novnc" target="_blank" class="btn btn-sm" title="Launch standalone full noVNC application in a new tab">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                <span>Standalone noVNC</span>
+            </a>
+            {{ end }}
+            <a href="/vms/{{ .VM.Config.ID }}" class="btn btn-sm">VM Details</a>
+            <a href="/vms" class="btn btn-sm">All VMs</a>
+        </div>
+    </div>
 
-<div class="card">
-    <p style="color: var(--text-muted);">
-        Interactive browser serial console will be connected in Phase 9.
-    </p>
+    {{ if ne .VM.Runtime.State "running" }}
+    <div class="card" style="padding: 2.5rem; text-align: center; background-color: var(--panel);">
+        <div style="font-size: 2.5rem; margin-bottom: 1rem;">🔌</div>
+        <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">Virtual Machine is Stopped</h2>
+        <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 1.5rem auto; font-size: 0.9rem;">
+            The interactive graphical display and serial console are only available when the VM is powered on and running.
+        </p>
+        <button class="btn btn-primary" hx-post="/vms/{{ .VM.Config.ID }}/start" hx-swap="none" onclick="setTimeout(() => window.location.reload(), 1000)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Start Virtual Machine</span>
+        </button>
+    </div>
+    {{ else }}
+    <div class="console-wrapper" id="console-wrapper" data-vm-id="{{ .VM.Config.ID }}" data-running="true">
+        <!-- Toolbar -->
+        <div class="console-toolbar">
+            <div class="console-toolbar-left">
+                <div class="console-tabs" role="tablist">
+                    <button class="console-tab active" id="tab-btn-vnc" type="button" data-mode="vnc">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                        <span>Graphical (noVNC)</span>
+                    </button>
+                    <button class="console-tab" id="tab-btn-ssh" type="button" data-mode="ssh">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="4 17 10 11 4 5"></polyline>
+                            <line x1="12" y1="19" x2="20" y2="19"></line>
+                        </svg>
+                        <span>Terminal (SSH / Shell)</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="console-toolbar-right">
+                <!-- Status Badge -->
+                <div class="console-status" id="console-status">
+                    <span class="console-status-dot connecting" id="status-dot"></span>
+                    <span class="console-status-text" id="status-text">Connecting...</span>
+                </div>
+
+                <!-- SSH Controls (visible in Terminal mode) -->
+                <div class="console-ssh-controls" id="ssh-controls" style="display: none; align-items: center; gap: 0.35rem;">
+                    <span style="font-size: 0.78rem; color: var(--text-muted);">User:</span>
+                    <input type="text" id="ssh-user-input" value="root" class="input" style="width: 65px; height: 26px; padding: 2px 6px; font-size: 0.78rem;" title="SSH Username">
+                    <select id="ssh-mode-select" class="input" style="height: 26px; padding: 2px 6px; font-size: 0.78rem;" title="Terminal Session Mode">
+                        <option value="ssh">Guest SSH</option>
+                        <option value="shell">Host Shell</option>
+                    </select>
+                </div>
+
+                <!-- CAD (VNC only) -->
+                <button class="btn btn-sm" id="btn-cad" type="button" title="Send Ctrl+Alt+Del key sequence to VM">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                        <line x1="6" y1="8" x2="6" y2="8.01"></line>
+                        <line x1="10" y1="8" x2="10" y2="8.01"></line>
+                        <line x1="14" y1="8" x2="14" y2="8.01"></line>
+                    </svg>
+                    <span>Ctrl+Alt+Del</span>
+                </button>
+
+                <!-- Reconnect -->
+                <button class="btn btn-sm" id="btn-reconnect" type="button" title="Reconnect console stream">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    <span>Reconnect</span>
+                </button>
+
+                <!-- Fullscreen -->
+                <button class="btn btn-sm" id="btn-fullscreen" type="button" title="Toggle Fullscreen">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon-fullscreen-enter">
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <polyline points="9 21 3 21 3 15"></polyline>
+                        <line x1="21" y1="3" x2="14" y2="10"></line>
+                        <line x1="3" y1="21" x2="10" y2="14"></line>
+                    </svg>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="icon-fullscreen-exit" style="display: none;">
+                        <polyline points="4 14 10 14 10 20"></polyline>
+                        <polyline points="20 10 14 10 14 4"></polyline>
+                        <line x1="14" y1="10" x2="21" y2="3"></line>
+                        <line x1="3" y1="21" x2="10" y2="14"></line>
+                    </svg>
+                    <span id="label-fullscreen">Fullscreen</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Viewport Container -->
+        <div class="console-viewport">
+            <!-- Mode 1: Graphical VNC View -->
+            <div class="console-pane active" id="pane-vnc">
+                <iframe id="novnc-frame"
+                        class="novnc-frame"
+                        src="/vendor/novnc/vnc.html?autoconnect=true&reconnect=true&resize=scale&path=/api/v1/vms/{{ .VM.Config.ID }}/vnc"
+                        title="noVNC Graphical Console - {{ .VM.Config.Name }}"
+                        allow="fullscreen; clipboard-read; clipboard-write">
+                </iframe>
+            </div>
+
+            <!-- Mode 2: SSH / Shell Terminal View -->
+            <div class="console-pane" id="pane-ssh">
+                <div id="terminal-ssh-container" class="terminal-container"></div>
+            </div>
+        </div>
+    </div>
+    {{ end }}
 </div>
+{{ end }}
+
+{{ define "scripts" }}
+{{ if and .VM (eq .VM.Runtime.State "running") }}
+<link rel="stylesheet" href="/vendor/xterm/xterm.css">
+<script src="/vendor/xterm/xterm.js"></script>
+<script src="/vendor/xterm/xterm-addon-fit.js"></script>
+<script src="/static/js/console.js"></script>
+{{ end }}
 {{ end }}

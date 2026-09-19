@@ -394,6 +394,37 @@ func TestAPISOs_UploadAndDelete(t *testing.T) {
 	if delAgainRec.Code != http.StatusNotFound {
 		t.Errorf("expected 404 Not Found on deleted ISO, got %d", delAgainRec.Code)
 	}
+
+	// 5. Upload another ISO and test HTMX deletion response (empty body + HX-Trigger)
+	bodyHtmx := &bytes.Buffer{}
+	writerHtmx := multipart.NewWriter(bodyHtmx)
+	partHtmx, _ := writerHtmx.CreateFormFile("file", "htmx-test.iso")
+	_, _ = partHtmx.Write([]byte("dummy iso contents"))
+	_ = writerHtmx.Close()
+
+	upHtmxReq := httptest.NewRequest(http.MethodPost, "/api/v1/isos", bodyHtmx)
+	upHtmxReq.Header.Set("Content-Type", writerHtmx.FormDataContentType())
+	upHtmxRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(upHtmxRec, upHtmxReq)
+	if upHtmxRec.Code != http.StatusCreated {
+		t.Fatalf("failed uploading second ISO: %d", upHtmxRec.Code)
+	}
+
+	htmxDelReq := httptest.NewRequest(http.MethodDelete, "/api/v1/isos/htmx-test.iso", nil)
+	htmxDelReq.Header.Set("HX-Request", "true")
+	htmxDelRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(htmxDelRec, htmxDelReq)
+
+	if htmxDelRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on HTMX ISO delete, got %d", htmxDelRec.Code)
+	}
+	if htmxDelRec.Body.Len() != 0 {
+		t.Errorf("expected empty body for HTMX swap so row is removed, got %q", htmxDelRec.Body.String())
+	}
+	triggerHdr := htmxDelRec.Header().Get("HX-Trigger")
+	if triggerHdr != "iso-updated" {
+		t.Errorf("expected HX-Trigger: iso-updated, got %q", triggerHdr)
+	}
 }
 
 func TestAPIVMs_QueryAndBodyActions(t *testing.T) {

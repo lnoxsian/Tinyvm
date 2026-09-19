@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"tinyvm/internal/storage"
 	"tinyvm/internal/version"
 	"tinyvm/internal/vm"
+	"tinyvm/internal/websocket"
 )
 
 // BasePageData contains common fields for page templates.
@@ -96,6 +98,12 @@ type ISOViewModel struct {
 
 // VMDetailPageData provides presentation data for a specific VM view.
 type VMDetailPageData struct {
+	BasePageData
+	VM *vm.VM
+}
+
+// VMConsolePageData provides presentation data for the interactive VM console view.
+type VMConsolePageData struct {
 	BasePageData
 	VM *vm.VM
 }
@@ -410,13 +418,165 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVMConsole(w http.ResponseWriter, r *http.Request) {
-	data := BasePageData{
-		ActiveNav:  "vms",
-		Version:    version.Version,
-		HostOnline: true,
-		KVMEnabled: checkKVM(),
+	// If the request requests a WebSocket upgrade, bridge to the serial console
+	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		s.handleAPIVMConsoleWS(w, r)
+		return
+	}
+
+	id := s.extractVMID(r)
+	if s.vmMgr == nil {
+		http.Error(w, "VM manager unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	targetVM, err := s.vmMgr.GetVM(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	data := VMConsolePageData{
+		BasePageData: BasePageData{
+			ActiveNav:  "vms",
+			Version:    version.Version,
+			HostOnline: true,
+			KVMEnabled: checkKVM(),
+		},
+		VM: targetVM,
 	}
 	s.render(w, "console", data)
+}
+
+func (s *Server) handleAPIVMConsoleWS(w http.ResponseWriter, r *http.Request) {
+	id := s.extractVMID(r)
+	if id == "" {
+		http.Error(w, "Missing VM ID", http.StatusBadRequest)
+		return
+	}
+	if s.vmMgr == nil {
+		http.Error(w, "VM manager unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	targetVM, err := s.vmMgr.GetVM(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if targetVM.Runtime.State != vm.StateRunning && targetVM.Runtime.State != vm.StateStarting {
+		http.Error(w, "VM is not running", http.StatusConflict)
+		return
+	}
+
+	vmDir, err := s.vmMgr.Storage().VMDir(id)
+	if err != nil {
+		http.Error(w, "Invalid VM directory", http.StatusBadRequest)
+		return
+	}
+	_ = websocket.HandleConsole(w, r, vmDir, s.logger)
+}
+
+func (s *Server) handleAPIVMVncWS(w http.ResponseWriter, r *http.Request) {
+	id := s.extractVMID(r)
+	if id == "" {
+		http.Error(w, "Missing VM ID", http.StatusBadRequest)
+		return
+	}
+	if s.vmMgr == nil {
+		http.Error(w, "VM manager unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	targetVM, err := s.vmMgr.GetVM(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if targetVM.Runtime.State != vm.StateRunning && targetVM.Runtime.State != vm.StateStarting {
+		http.Error(w, "VM is not running", http.StatusConflict)
+		return
+	}
+
+	vmDir, err := s.vmMgr.Storage().VMDir(id)
+	if err != nil {
+		http.Error(w, "Invalid VM directory", http.StatusBadRequest)
+		return
+	}
+	_ = websocket.HandleVNC(w, r, vmDir, s.logger)
+}
+
+func (s *Server) handleAPIVMSSHWS(w http.ResponseWriter, r *http.Request) {
+	id := s.extractVMID(r)
+	if id == "" {
+		http.Error(w, "Missing VM ID", http.StatusBadRequest)
+		return
+	}
+	if s.vmMgr == nil {
+		http.Error(w, "VM manager unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	targetVM, err := s.vmMgr.GetVM(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if targetVM.Runtime.State != vm.StateRunning && targetVM.Runtime.State != vm.StateStarting {
+		http.Error(w, "VM is not running", http.StatusConflict)
+		return
+	}
+
+	vmDir, err := s.vmMgr.Storage().VMDir(id)
+	if err != nil {
+		http.Error(w, "Invalid VM directory", http.StatusBadRequest)
+		return
+	}
+
+	sshPort := targetVM.Config.Network.SSHPort
+	if sshPort <= 0 {
+		for _, pf := range targetVM.Config.Network.Ports {
+			if pf.Guest == 22 && (pf.Protocol == "" || strings.EqualFold(pf.Protocol, "tcp")) {
+				sshPort = pf.Host
+				break
+			}
+		}
+	}
+
+	user := r.URL.Query().Get("user")
+	mode := r.URL.Query().Get("mode")
+
+	_ = websocket.HandleSSH(w, r, websocket.SSHOptions{
+		VMID:    id,
+		VMName:  targetVM.Config.Name,
+		VMDir:   vmDir,
+		SSHPort: sshPort,
+		User:    user,
+		Mode:    mode,
+		Logger:  s.logger,
+	})
+}
+
+func (s *Server) handleVMNoVNCApp(w http.ResponseWriter, r *http.Request) {
+	id := s.extractVMID(r)
+	if id == "" {
+		http.Error(w, "Missing VM ID", http.StatusBadRequest)
+		return
+	}
+	if s.vmMgr == nil {
+		http.Error(w, "VM manager unavailable", http.StatusInternalServerError)
+		return
+	}
+	if _, err := s.vmMgr.GetVM(id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	targetURL := fmt.Sprintf("/vendor/novnc/vnc.html?autoconnect=true&reconnect=true&resize=scale&path=/api/v1/vms/%s/vnc", url.PathEscape(id))
+	http.Redirect(w, r, targetURL, http.StatusTemporaryRedirect)
 }
 
 func (s *Server) handleStorage(w http.ResponseWriter, r *http.Request) {
