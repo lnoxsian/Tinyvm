@@ -55,6 +55,10 @@
             <span class="vm-runtime-val">{{ .Uptime }}</span>
         </div>
         {{ end }}
+        <div class="vm-runtime-item">
+            <span class="vm-runtime-label">CPU:</span>
+            <span class="vm-runtime-val">{{ .CPUPercent }}%</span>
+        </div>
         {{ if .MemUsedMB }}
         <div class="vm-runtime-item">
             <span class="vm-runtime-label">RAM RSS:</span>

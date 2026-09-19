@@ -48,6 +48,82 @@ func NewServer(cfg *config.Config, logger *slog.Logger, vmMgr *vm.Manager) (*Ser
 		"formatFloat": func(f float64) string {
 			return fmt.Sprintf("%.1f", f)
 		},
+		"toInt": func(v any) int {
+			switch n := v.(type) {
+			case int:
+				return n
+			case int64:
+				return int(n)
+			case uint64:
+				return int(n)
+			case float64:
+				return int(n)
+			case float32:
+				return int(n)
+			default:
+				return 0
+			}
+		},
+		"calcPercent": func(part, total any) int {
+			var p, t float64
+			switch n := part.(type) {
+			case int:
+				p = float64(n)
+			case int64:
+				p = float64(n)
+			case uint64:
+				p = float64(n)
+			case float64:
+				p = n
+			}
+			switch n := total.(type) {
+			case int:
+				t = float64(n)
+			case int64:
+				t = float64(n)
+			case uint64:
+				t = float64(n)
+			case float64:
+				t = n
+			}
+			if t <= 0 {
+				return 0
+			}
+			pct := int((p / t) * 100)
+			if pct < 0 {
+				return 0
+			}
+			if pct > 100 {
+				return 100
+			}
+			return pct
+		},
+		"formatBytes": func(v any) string {
+			var b int64
+			switch n := v.(type) {
+			case int:
+				b = int64(n)
+			case int64:
+				b = n
+			case uint64:
+				b = int64(n)
+			case float64:
+				b = int64(n)
+			}
+			if b <= 0 {
+				return "0 B"
+			}
+			const unit = 1024
+			if b < unit {
+				return fmt.Sprintf("%d B", b)
+			}
+			div, exp := int64(unit), 0
+			for n := b / unit; n >= unit; n /= unit {
+				div *= unit
+				exp++
+			}
+			return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+		},
 	}
 
 	// Parse web templates with shared modular components
@@ -59,6 +135,7 @@ func NewServer(cfg *config.Config, logger *slog.Logger, vmMgr *vm.Manager) (*Ser
 			"templates/card.html",
 			"templates/stats.html",
 			"templates/grid.html",
+			"templates/telemetry.html",
 			"templates/"+page+".html",
 		)
 		if err != nil {

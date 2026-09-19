@@ -47,6 +47,10 @@
     </div>
 </div>
 
+<div style="margin-top: 1.5rem;">
+    {{ template "vm-telemetry" .Metrics }}
+</div>
+
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
     <!-- Storage Section -->
     <div class="card">

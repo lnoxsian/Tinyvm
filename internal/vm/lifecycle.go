@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"tinyvm/internal/host"
 	"tinyvm/internal/qemu"
 )
 
@@ -25,6 +26,8 @@ type VMStatusInfo struct {
 	Runtime         VMRuntime     `json:"runtime"`
 	Uptime          time.Duration `json:"uptime,omitempty"`
 	UptimeSeconds   int64         `json:"uptime_seconds,omitempty"`
+	CPUPercent      float64       `json:"cpu_percent,omitempty"`
+	MemoryRSSBytes  uint64        `json:"memory_rss_bytes,omitempty"`
 	DiskActualBytes int64         `json:"disk_actual_bytes,omitempty"`
 	Firmware        string        `json:"firmware"`
 	EFIVarsPath     string        `json:"efi_vars_path,omitempty"`
@@ -343,8 +346,14 @@ func (m *Manager) StatusVM(id string) (*VMStatusInfo, error) {
 	}
 
 	var uptime time.Duration
+	var cpuPercent float64
+	var memRSS uint64
 	if runtime.State == StateRunning && !runtime.StartedAt.IsZero() {
 		uptime = time.Since(runtime.StartedAt).Round(time.Second)
+	}
+	if runtime.State == StateRunning && runtime.PID > 0 {
+		cpuPercent = host.GetProcessCPUPercent(runtime.PID)
+		memRSS = host.GetProcessRSSBytes(runtime.PID)
 	}
 
 	var diskActualBytes int64
@@ -352,6 +361,9 @@ func (m *Manager) StatusVM(id string) (*VMStatusInfo, error) {
 		diskPath := filepath.Join(vmDir, cfg.Disk)
 		if fi, err := os.Stat(diskPath); err == nil {
 			diskActualBytes = fi.Size()
+			if stat, ok := fi.Sys().(*syscall.Stat_t); ok {
+				diskActualBytes = stat.Blocks * 512
+			}
 		}
 	}
 
@@ -382,6 +394,8 @@ func (m *Manager) StatusVM(id string) (*VMStatusInfo, error) {
 		Runtime:         runtime,
 		Uptime:          uptime,
 		UptimeSeconds:   uptimeSecs,
+		CPUPercent:      cpuPercent,
+		MemoryRSSBytes:  memRSS,
 		DiskActualBytes: diskActualBytes,
 		Firmware:        cfg.Firmware,
 		EFIVarsPath:     efiVarsPath,

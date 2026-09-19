@@ -39,11 +39,13 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /partials/stats", s.handlePartialStats)
 	mux.HandleFunc("GET /partials/vms", s.handlePartialVMs)
 	mux.HandleFunc("GET /partials/vms/{id}", s.handlePartialVMCard)
+	mux.HandleFunc("GET /partials/vms/{id}/metrics", s.handlePartialVMMetrics)
 
 	// Health API
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
 
 	// REST API v1
+	mux.HandleFunc("GET /api/v1/metrics", s.handleAPIMetrics)
 	mux.HandleFunc("GET /api/v1/vms", s.handleAPIVMsList)
 	mux.HandleFunc("POST /api/v1/vms", s.handleAPIVMCreate)
 	mux.HandleFunc("GET /api/v1/vms/{id}", s.handleAPIVMGet)
@@ -54,12 +56,14 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/vms/{id}/stop", s.handleAPIVMStop)
 	mux.HandleFunc("POST /api/v1/vms/{id}/quit", s.handleAPIVMQuit)
 	mux.HandleFunc("GET /api/v1/vms/{id}/status", s.handleAPIVMStatus)
+	mux.HandleFunc("GET /api/v1/vms/{id}/metrics", s.handleAPIVMMetrics)
 	mux.HandleFunc("GET /api/v1/isos", s.handleAPIISOsList)
 	mux.HandleFunc("POST /api/v1/isos", s.handleAPIISOUpload)
 	mux.HandleFunc("DELETE /api/v1/isos/{name}", s.handleAPIISODelete)
 
 	// WebSockets (Serial Console & Graphical VNC RFB stream & SSH/Shell PTY)
 	mux.HandleFunc("GET /api/v1/vms/{id}/console", s.handleAPIVMConsoleWS)
+	mux.HandleFunc("GET /api/v1/vnc", s.handleAPIVMVncWS)
 	mux.HandleFunc("GET /api/v1/vms/{id}/vnc", s.handleAPIVMVncWS)
 	mux.HandleFunc("GET /api/v1/vms/{id}/ssh", s.handleAPIVMSSHWS)
 	mux.HandleFunc("GET /vms/{id}/ws/console", s.handleAPIVMConsoleWS)
@@ -68,6 +72,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /vms/{id}/vnc", s.handleAPIVMVncWS)
 
 	// Direct REST API Shorthands
+	mux.HandleFunc("GET /metrics", s.handleAPIMetrics)
+	mux.HandleFunc("GET /vms/{id}/metrics", s.handleAPIVMMetrics)
 	mux.HandleFunc("POST /vms", s.handleAPIVMCreate)
 	mux.HandleFunc("DELETE /vms/{id}", s.handleAPIVMDelete)
 	mux.HandleFunc("POST /vms/{id}/start", s.handleAPIVMStart)

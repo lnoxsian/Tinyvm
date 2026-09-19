@@ -67,3 +67,30 @@ func TestGetProcessRSSBytes(t *testing.T) {
 		t.Errorf("expected 0 RSS for PID -1")
 	}
 }
+
+func TestGetProcessCPUPercent(t *testing.T) {
+	pid := os.Getpid()
+	pct := GetProcessCPUPercent(pid)
+	if pct < 0 {
+		t.Errorf("expected CPU percent >= 0, got %f", pct)
+	}
+
+	// Do some busy work to consume cycles
+	for i := 0; i < 10000000; i++ {
+		_ = i * i
+	}
+
+	pct2 := GetProcessCPUPercent(pid)
+	if pct2 < 0 {
+		t.Errorf("expected second CPU percent >= 0, got %f", pct2)
+	}
+
+	// Invalid PID should safely return 0
+	if GetProcessCPUPercent(-1) != 0.0 {
+		t.Errorf("expected 0 CPU percent for PID -1")
+	}
+	if GetProcessCPUPercent(999999999) != 0.0 {
+		t.Errorf("expected 0 CPU percent for non-existent PID")
+	}
+}
+

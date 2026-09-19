@@ -60,6 +60,7 @@ type VMCardView struct {
 	ISO         string
 	PID         int
 	Uptime      string
+	CPUPercent  float64
 	SSHPort     int
 	IsRunning   bool
 }
@@ -99,7 +100,8 @@ type ISOViewModel struct {
 // VMDetailPageData provides presentation data for a specific VM view.
 type VMDetailPageData struct {
 	BasePageData
-	VM *vm.VM
+	VM      *vm.VM
+	Metrics *vm.VMMetrics
 }
 
 // VMConsolePageData provides presentation data for the interactive VM console view.
@@ -163,9 +165,11 @@ func toVMCardView(v *vm.VM) VMCardView {
 	}
 
 	var memUsedMB int
+	var cpuPercent float64
 	if v.Runtime.State == vm.StateRunning && v.Runtime.PID > 0 {
 		rss := host.GetProcessRSSBytes(v.Runtime.PID)
 		memUsedMB = int(rss / (1024 * 1024))
+		cpuPercent = host.GetProcessCPUPercent(v.Runtime.PID)
 	}
 
 	return VMCardView{
@@ -182,6 +186,7 @@ func toVMCardView(v *vm.VM) VMCardView {
 		ISO:         v.Config.ISO,
 		PID:         v.Runtime.PID,
 		Uptime:      uptimeStr,
+		CPUPercent:  cpuPercent,
 		SSHPort:     v.Config.Network.SSHPort,
 		IsRunning:   (st == "running"),
 	}
@@ -328,6 +333,25 @@ func (s *Server) handlePartialVMCard(w http.ResponseWriter, r *http.Request) {
 	_ = s.templates["dashboard"].ExecuteTemplate(w, "vm-card", cardView)
 }
 
+func (s *Server) handlePartialVMMetrics(w http.ResponseWriter, r *http.Request) {
+	id := s.extractVMID(r)
+	if id == "" {
+		http.Error(w, "Missing VM ID", http.StatusBadRequest)
+		return
+	}
+	if s.vmMgr == nil {
+		http.Error(w, "VM manager unavailable", http.StatusInternalServerError)
+		return
+	}
+	metrics, err := s.vmMgr.GetVMMetrics(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = s.templates["detail"].ExecuteTemplate(w, "vm-telemetry", metrics)
+}
+
 func (s *Server) handleVMCreate(w http.ResponseWriter, r *http.Request) {
 	var isoNames []string
 	if s.vmMgr != nil && s.vmMgr.Storage() != nil {
@@ -405,6 +429,8 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metrics, _ := s.vmMgr.GetVMMetrics(id)
+
 	data := VMDetailPageData{
 		BasePageData: BasePageData{
 			ActiveNav:  "vms",
@@ -412,7 +438,8 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 			HostOnline: true,
 			KVMEnabled: checkKVM(),
 		},
-		VM: targetVM,
+		VM:      targetVM,
+		Metrics: metrics,
 	}
 	s.render(w, "detail", data)
 }
@@ -681,3 +708,31 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(resp)
 }
+
+func (s *Server) handleAPIMetrics(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager unavailable")
+		return
+	}
+	metrics := s.vmMgr.GetHostMetrics()
+	writeJSON(w, http.StatusOK, metrics)
+}
+
+func (s *Server) handleAPIVMMetrics(w http.ResponseWriter, r *http.Request) {
+	id := s.extractVMID(r)
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM id")
+		return
+	}
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager unavailable")
+		return
+	}
+	metrics, err := s.vmMgr.GetVMMetrics(id)
+	if err != nil {
+		WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, metrics)
+}
+
