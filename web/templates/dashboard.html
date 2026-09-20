@@ -4,15 +4,8 @@
 <div class="content-header">
     <div class="content-header-title">
         <h1 class="content-title">Dashboard Overview</h1>
-        <p class="content-subtitle">Host system metrics and virtual machine manager</p>
+        <!-- <p class="content-subtitle">Host system metrics and virtual machine manager</p> -->
     </div>
-    <a href="/vms/new" class="btn btn-primary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-        <span>Create VM</span>
-    </a>
 </div>
 
 <!-- Stats Grid -->
@@ -21,15 +14,6 @@
 <!-- Virtual Machines Section -->
 <div class="content-header" style="margin-top: 2.25rem; margin-bottom: 1rem;">
     <h2 class="content-title" style="font-size: 1.1rem;">Virtual Machines</h2>
-    <div class="header-actions">
-        <button class="btn btn-sm" hx-get="/partials/vms" hx-target="#vm-grid" hx-swap="outerHTML" title="Refresh VM list">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="23 4 23 10 17 10"></polyline>
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-            </svg>
-            <span>Refresh</span>
-        </button>
-    </div>
 </div>
 
 {{ template "vm-grid" . }}

@@ -36,7 +36,6 @@ type DashboardPageData struct {
 	StoppedVMs  int
 	CPUPercent  int
 	CPUCores    int
-	KVMEnabled  bool
 	MemUsedGB   float64
 	MemTotalGB  float64
 	MemPercent  int
@@ -296,7 +295,6 @@ func (s *Server) getDashboardData() DashboardPageData {
 		StoppedVMs:  stopped,
 		CPUPercent:  cpuInfo.UsagePercent,
 		CPUCores:    cpuInfo.Count,
-		KVMEnabled:  kvmOk,
 		MemUsedGB:   memUsedGB,
 		MemTotalGB:  memTotalGB,
 		MemPercent:  memPercent,

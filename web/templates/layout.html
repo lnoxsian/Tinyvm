@@ -17,24 +17,14 @@
         <header class="app-header">
             <a href="/" class="brand">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/>
-                    <rect width="20" height="8" x="2" y="14" rx="2" ry="2"/>
+                    <rect width="20" height="8" x="2" y="2"/>
+                    <rect width="20" height="8" x="2" y="14"/>
                     <line x1="6" x2="6.01" y1="6" y2="6"/>
                     <line x1="6" x2="6.01" y1="18" y2="18"/>
                 </svg>
                 <span>TinyVM</span>
                 <span class="brand-badge">{{ .Version }}</span>
             </a>
-            <div class="header-status">
-                <span class="badge {{ if .KVMEnabled }}badge-kvm-active{{ else }}badge-kvm-disabled{{ end }}">
-                    <span class="badge-dot"></span>
-                    <span>{{ if .KVMEnabled }}KVM Acceleration{{ else }}TCG Emulated{{ end }}</span>
-                </span>
-                <span class="status-indicator">
-                    <span class="status-dot {{ if .HostOnline }}online{{ else }}offline{{ end }}"></span>
-                    <span>{{ if .HostOnline }}Host Online{{ else }}Host Offline{{ end }}</span>
-                </span>
-            </div>
         </header>
 
         <div class="app-body">

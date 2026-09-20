@@ -1,15 +1,28 @@
 {{ define "vm-grid" }}
-<div class="vm-grid-container" id="vm-grid" hx-get="/partials/vms" hx-trigger="every 10s, vm-updated from:body" hx-swap="outerHTML settle:0s">
+<div class="vm-grid-container" id="vm-grid" hx-get="/partials/vms" hx-trigger="every 5s, vm-updated from:body" hx-swap="outerHTML settle:0s">
     {{ if .VMs }}
-    <div class="vm-grid">
-        {{ range .VMs }}
-            {{ template "vm-card" . }}
-        {{ end }}
+    <div class="vm-table-wrapper">
+        <div class="vm-table">
+            <div class="vm-table-header">
+                <div class="vm-th vm-col-status">Status</div>
+                <div class="vm-th vm-col-name">Name</div>
+                <div class="vm-th vm-col-pid">PID</div>
+                <div class="vm-th vm-col-cpu">CPU</div>
+                <div class="vm-th vm-col-ram">RAM</div>
+                <div class="vm-th vm-col-uptime">Uptime</div>
+                <div class="vm-th vm-col-actions">Actions</div>
+            </div>
+            <div class="vm-table-body">
+                {{ range .VMs }}
+                    {{ template "vm-card" . }}
+                {{ end }}
+            </div>
+        </div>
     </div>
     {{ else }}
     <div class="empty-state">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); margin-bottom: 1rem;">
-            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <rect x="2" y="3" width="20" height="14" rx="0"/>
             <line x1="8" x2="16" y1="21" y2="21"/>
             <line x1="12" x2="12" y1="17" y2="21"/>
         </svg>

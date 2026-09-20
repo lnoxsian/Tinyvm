@@ -66,6 +66,55 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Initialize VM Creation Wizard if present
     initCreateVMWizard();
+
+    // Helper to safely schedule telemetry rendering via requestAnimationFrame
+    function scheduleTelemetryRender(pushPoint = false) {
+        requestAnimationFrame(() => {
+            renderVMTelemetryCharts(pushPoint);
+        });
+    }
+
+    // Initialize VM Telemetry sparklines if present
+    scheduleTelemetryRender(true);
+    window.addEventListener("resize", () => scheduleTelemetryRender(false));
+
+    // Redraw when window or document becomes visible/focused
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            scheduleTelemetryRender(false);
+        }
+    });
+    window.addEventListener("focus", () => scheduleTelemetryRender(false));
+
+    // Handle HTMX swaps, settles, and loads
+    document.addEventListener("htmx:afterSwap", (evt) => {
+        if (document.querySelector(".vm-telemetry-canvas")) {
+            scheduleTelemetryRender(true);
+        }
+    });
+    document.addEventListener("htmx:afterSettle", (evt) => {
+        if (document.querySelector(".vm-telemetry-canvas")) {
+            scheduleTelemetryRender(false);
+        }
+    });
+    if (window.htmx) {
+        window.htmx.onLoad(() => {
+            if (document.querySelector(".vm-telemetry-canvas")) {
+                scheduleTelemetryRender(true);
+            }
+        });
+    }
+
+    // Watchdog: Ensure visible canvases in active summary tab are always drawn and never blank
+    setInterval(() => {
+        const summaryTab = document.getElementById("tab-summary");
+        if (summaryTab && summaryTab.classList.contains("active")) {
+            const canvases = document.querySelectorAll(".vm-telemetry-canvas");
+            if (canvases.length > 0) {
+                renderVMTelemetryCharts(false);
+            }
+        }
+    }, 2000);
 });
 
 // Floating toast notification system
@@ -338,3 +387,192 @@ function populateReviewCard() {
         document.getElementById("rev-ssh").textContent = "Disabled";
     }
 }
+
+// Render real-time HTML5 Canvas telemetry sparklines (CPU, RAM, Storage) for VM summary
+function renderVMTelemetryCharts(pushPoint = true) {
+    const canvases = document.querySelectorAll(".vm-telemetry-canvas");
+    if (!canvases || canvases.length === 0) return;
+
+    window.vmTelemetryHistory = window.vmTelemetryHistory || {};
+
+    const panel = document.getElementById("vm-telemetry");
+    const sampleTime = panel ? panel.getAttribute("data-sample-time") : null;
+    const lastIngested = panel ? panel.getAttribute("data-last-ingested") : null;
+
+    let shouldPush = pushPoint;
+    if (sampleTime) {
+        if (sampleTime === lastIngested) {
+            shouldPush = false;
+        } else if (pushPoint) {
+            panel.setAttribute("data-last-ingested", sampleTime);
+        }
+    }
+
+    const colorConfig = {
+        cpu: { stroke: "#58a6ff", fill: "rgba(88, 166, 255, 0.18)" },
+        ram: { stroke: "#3fb950", fill: "rgba(63, 185, 80, 0.18)" },
+        storage: { stroke: "#d29922", fill: "rgba(210, 153, 34, 0.18)" }
+    };
+
+    canvases.forEach((canvas) => {
+        const vmId = canvas.getAttribute("data-vmid") || "default";
+        const metric = canvas.getAttribute("data-metric") || "cpu";
+        const val = parseFloat(canvas.getAttribute("data-value")) || 0;
+        const status = canvas.getAttribute("data-status");
+
+        if (!window.vmTelemetryHistory[vmId]) {
+            window.vmTelemetryHistory[vmId] = {};
+        }
+        const vmHist = window.vmTelemetryHistory[vmId];
+
+        const isRunning = status === "running";
+        const sampleVal = (isRunning || metric === "storage") ? val : 0;
+
+        if (!vmHist[metric]) {
+            vmHist[metric] = [sampleVal];
+        } else if (shouldPush) {
+            vmHist[metric].push(sampleVal);
+            if (vmHist[metric].length > 30) {
+                vmHist[metric].shift();
+            }
+        }
+
+        const data = vmHist[metric];
+        const conf = colorConfig[metric] || colorConfig.cpu;
+
+        const wrap = canvas.parentElement;
+        const rect = canvas.getBoundingClientRect();
+        const wrapW = wrap ? wrap.clientWidth : 0;
+        const wrapH = wrap ? wrap.clientHeight : 0;
+
+        // If the canvas container is completely hidden (e.g. inactive tab), skip drawing until visible
+        if (wrapW === 0 && (!rect || rect.width === 0)) {
+            return;
+        }
+
+        const width = Math.floor((rect && rect.width > 0) ? rect.width : (wrapW > 0 ? wrapW : 340));
+        const height = Math.floor((rect && rect.height > 0) ? rect.height : (wrapH > 0 ? wrapH : 52));
+        const dpr = window.devicePixelRatio || 1;
+
+        const targetW = Math.max(50, width);
+        const targetH = Math.max(20, height);
+
+        canvas.width = Math.floor(targetW * dpr);
+        canvas.height = Math.floor(targetH * dpr);
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(dpr, dpr);
+
+        const padL = 28;
+        const padR = 6;
+        const padT = 5;
+        const padB = 14;
+        const plotW = Math.max(10, targetW - padL - padR);
+        const plotH = Math.max(10, targetH - padT - padB);
+
+        // Horizontal grid lines at 0, 50, 100
+        ctx.lineWidth = 1;
+        ctx.font = "8px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "middle";
+
+        [0, 50, 100].forEach((pct) => {
+            const y = padT + plotH - (pct / 100) * plotH;
+            ctx.strokeStyle = "rgba(110, 118, 129, 0.12)";
+            ctx.beginPath();
+            ctx.moveTo(padL, y);
+            ctx.lineTo(padL + plotW, y);
+            ctx.stroke();
+
+            ctx.fillStyle = "#6e7681";
+            ctx.fillText(`${pct}%`, padL - 4, y);
+        });
+
+        // Time axis indicators
+        ctx.fillStyle = "#6e7681";
+        ctx.textAlign = "left";
+        ctx.fillText("-2.5m", padL, targetH - 3);
+        ctx.textAlign = "right";
+        ctx.fillText("now", padL + plotW, targetH - 3);
+
+        // Draw sparkline curve
+        const maxPoints = 30;
+        const stepX = plotW / (maxPoints - 1);
+
+        if (data.length === 1) {
+            const v = Math.max(0, Math.min(100, data[0]));
+            const y = padT + plotH - (v / 100) * plotH;
+            ctx.beginPath();
+            ctx.moveTo(padL, y);
+            ctx.lineTo(padL + plotW, y);
+            ctx.strokeStyle = conf.stroke;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(padL + plotW, y, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = conf.stroke;
+            ctx.fill();
+        } else {
+            const startX = padL + plotW - (data.length - 1) * stepX;
+            ctx.beginPath();
+            data.forEach((v, i) => {
+                const clamped = Math.max(0, Math.min(100, v));
+                const x = startX + i * stepX;
+                const y = padT + plotH - (clamped / 100) * plotH;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.strokeStyle = conf.stroke;
+            ctx.lineWidth = 1.75;
+            ctx.stroke();
+
+            if (conf.fill) {
+                const lastX = padL + plotW;
+                const baseY = padT + plotH;
+                ctx.beginPath();
+                ctx.moveTo(startX, baseY);
+                data.forEach((v, i) => {
+                    const clamped = Math.max(0, Math.min(100, v));
+                    const x = startX + i * stepX;
+                    const y = padT + plotH - (clamped / 100) * plotH;
+                    ctx.lineTo(x, y);
+                });
+                ctx.lineTo(lastX, baseY);
+                ctx.closePath();
+
+                const grad = ctx.createLinearGradient(0, padT, 0, baseY);
+                grad.addColorStop(0, conf.fill);
+                grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+                ctx.fillStyle = grad;
+                ctx.fill();
+            }
+
+            const lastVal = Math.max(0, Math.min(100, data[data.length - 1]));
+            const lastX = padL + plotW;
+            const lastY = padT + plotH - (lastVal / 100) * plotH;
+            ctx.beginPath();
+            ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = conf.stroke;
+            ctx.fill();
+        }
+
+        if (!isRunning && metric !== "storage") {
+            ctx.fillStyle = "rgba(110, 118, 129, 0.55)";
+            ctx.font = "bold 9px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("OFFLINE", padL + plotW / 2, padT + plotH / 2);
+        }
+
+        ctx.restore();
+    });
+}
+
+
+

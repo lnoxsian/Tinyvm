@@ -70,9 +70,6 @@ func TestDashboard_HostStatsAndRendering(t *testing.T) {
 	if strings.Contains(body, ">Linux<") {
 		t.Errorf("expected overview card NOT to contain 'Linux' badge")
 	}
-	if !strings.Contains(body, "1024 MB") {
-		t.Errorf("expected body to contain '1024 MB'")
-	}
 	if !strings.Contains(body, "Delete") {
 		t.Errorf("expected body to contain 'Delete' button")
 	}
@@ -158,9 +155,6 @@ func TestDashboard_HTMXPartials(t *testing.T) {
 	if strings.Contains(body, ">UEFI<") {
 		t.Errorf("expected partial card NOT to contain 'UEFI' badge")
 	}
-	if !strings.Contains(body, "512 MB") {
-		t.Errorf("expected partial card to contain '512 MB'")
-	}
 }
 
 func TestDashboard_HTMXLifecycleActions(t *testing.T) {
@@ -224,8 +218,8 @@ func TestDashboard_HTMXLifecycleActions(t *testing.T) {
 	if !strings.Contains(stoppedCardHTML, "Delete") {
 		t.Errorf("expected stoppedCardHTML to contain 'Delete' action button")
 	}
-	if !strings.Contains(stoppedCardHTML, ">0<") {
-		t.Errorf("expected stoppedCardHTML to contain '0' value for PID stat")
+	if strings.Contains(stoppedCardHTML, "PID:") {
+		t.Errorf("expected stoppedCardHTML NOT to contain runtime stats when stopped")
 	}
 
 	// 3. Delete VM with HX-Request -> returns 200 OK with empty body and HX-Trigger: vm-updated

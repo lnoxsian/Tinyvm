@@ -112,34 +112,12 @@
         </svg>
         <span>Summary</span>
     </button>
-    <button type="button" class="pve-tab" data-tab="hardware">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
-            <rect x="9" y="9" width="6" height="6"></rect>
-            <line x1="9" y1="1" x2="9" y2="4"></line>
-            <line x1="15" y1="1" x2="15" y2="4"></line>
-            <line x1="9" y1="20" x2="9" y2="23"></line>
-            <line x1="15" y1="20" x2="15" y2="23"></line>
-            <line x1="20" y1="9" x2="23" y2="9"></line>
-            <line x1="20" y1="14" x2="23" y2="14"></line>
-            <line x1="1" y1="9" x2="4" y2="9"></line>
-            <line x1="1" y1="14" x2="4" y2="14"></line>
-        </svg>
-        <span>Hardware</span>
-    </button>
     <button type="button" class="pve-tab" data-tab="options">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
         <span>Options</span>
-    </button>
-    <button type="button" class="pve-tab" data-tab="snapshots">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-            <circle cx="12" cy="13" r="4"></circle>
-        </svg>
-        <span>Snapshots ({{ len .Snapshots }})</span>
     </button>
     <button type="button" class="pve-tab" data-tab="logs">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -155,417 +133,341 @@
 
 <!-- ================= TAB 1: SUMMARY ================= -->
 <div class="pve-tab-content active" id="tab-summary">
-    <div class="stats-grid">
-        <div class="stat-card">
-            <span class="stat-label">VM Identifier</span>
-            <div class="stat-value" style="font-size: 1.25rem; font-family: monospace;">{{ .VM.Config.ID }}</div>
-            <div class="stat-meta">Process PID: {{ if gt .VM.Runtime.PID 0 }}{{ .VM.Runtime.PID }}{{ else }}Not Running{{ end }}</div>
+    <div class="vm-summary-layout">
+        <!-- Pane 1: VM Details -->
+        <div class="vm-summary-pane vm-details-pane">
+            <div class="card vm-details-card">
+                <div class="card-header">
+                    <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="0"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                        <span>VM Details</span>
+                    </h3>
+                </div>
+                <table class="pve-table vm-details-table">
+                    <tbody>
+                        <tr>
+                            <td class="property-name">VM Name</td>
+                            <td><strong>{{ .VM.Config.Name }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">VM Identifier</td>
+                            <td><span style="font-family: var(--font-mono); font-size: 0.85rem;">{{ .VM.Config.ID }}</span></td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">Process PID</td>
+                            <td><span style="font-family: var(--font-mono);">{{ if gt .VM.Runtime.PID 0 }}{{ .VM.Runtime.PID }}{{ else }}—{{ end }}</span></td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">vCPUs</td>
+                            <td>{{ .VM.Config.CPUs }} vCPUs {{ if .KVMEnabled }}<span class="text-muted">(KVM Accelerated)</span>{{ else }}<span class="text-muted">(TCG Emulated)</span>{{ end }}</td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">Memory (RAM)</td>
+                            <td>{{ .VM.Config.MemoryMB }} MB</td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">Firmware</td>
+                            <td style="text-transform: uppercase;">{{ .VM.Config.Firmware }}</td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">OS Type</td>
+                            <td style="text-transform: capitalize;">{{ if .VM.Config.OSType }}{{ .VM.Config.OSType }}{{ else }}Linux{{ end }}</td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">Virtual Disk</td>
+                            <td>{{ .VM.Config.DiskSize }} <span class="text-muted">({{ if .VM.Config.DiskFormat }}{{ .VM.Config.DiskFormat }}{{ else }}qcow2{{ end }})</span></td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">CD/DVD Drive</td>
+                            <td>{{ if .VM.Config.ISO }}<span style="font-family: var(--font-mono); color: var(--accent);">{{ .VM.Config.ISO }}</span>{{ else }}<span class="text-muted">None (Direct Disk Boot)</span>{{ end }}</td>
+                        </tr>
+                        <tr>
+                            <td class="property-name">SSH Forward</td>
+                            <td>{{ if .VM.Config.Network.SSHPort }}<span style="font-family: var(--font-mono); color: var(--accent-blue);">:{{ .VM.Config.Network.SSHPort }} &rarr; 22</span>{{ else }}<span class="text-muted">Disabled</span>{{ end }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <div class="stat-card">
-            <span class="stat-label">Status</span>
-            <div class="stat-value" style="font-size: 1.25rem; text-transform: uppercase;">{{ .VM.Runtime.State }}</div>
-            <div class="stat-meta">Firmware: {{ .VM.Config.Firmware }}</div>
+
+        <!-- Pane 2: Live Telemetry -->
+        <div class="vm-summary-pane vm-telemetry-pane">
+            {{ template "vm-telemetry" .Metrics }}
         </div>
-        <div class="stat-card">
-            <span class="stat-label">Processors</span>
-            <div class="stat-value" style="font-size: 1.25rem;">{{ .VM.Config.CPUs }} vCPUs</div>
-            <div class="stat-meta">{{ if .KVMEnabled }}KVM Hardware Accelerated{{ else }}Emulated{{ end }}</div>
-        </div>
-        <div class="stat-card">
-            <span class="stat-label">Allocated RAM</span>
-            <div class="stat-value" style="font-size: 1.25rem;">{{ .VM.Config.MemoryMB }} MB</div>
-            <div class="stat-meta">Guest Memory</div>
-        </div>
-    </div>
-
-    <div style="margin-top: 1.5rem;">
-        {{ template "vm-telemetry" .Metrics }}
-    </div>
-</div>
-
-<!-- ================= TAB 2: HARDWARE ================= -->
-<div class="pve-tab-content" id="tab-hardware">
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">Hardware Specifications</h3>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">Configure CPU, Memory, Disks, and CD-ROM media</span>
-        </div>
-        <table class="pve-table">
-            <thead>
-                <tr>
-                    <th style="width: 200px;">Device / Subsystem</th>
-                    <th>Configuration Details</th>
-                    <th style="width: 220px; text-align: right;">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- CD/DVD Drive (Attached ISO) -->
-                <tr>
-                    <td class="property-name" style="font-weight: 600;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <circle cx="12" cy="12" r="3"></circle>
-                            </svg>
-                            <span>CD/DVD Drive</span>
-                        </div>
-                    </td>
-                    <td>
-                        {{ if .VM.Config.ISO }}
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
-                            <span style="font-family: monospace; font-weight: 500; color: var(--accent);">{{ .VM.Config.ISO }}</span>
-                            <span class="badge badge-subtle">Loaded Media</span>
-                        </div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">
-                            Eject the ISO once installation is finished so the VM boots directly into the installed OS.
-                        </div>
-                        {{ else }}
-                        <div style="color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
-                            <span>Empty (No media attached - booting directly from virtual disk)</span>
-                        </div>
-                        {{ end }}
-                    </td>
-                    <td style="text-align: right;">
-                        {{ if .VM.Config.ISO }}
-                        <button class="btn btn-sm btn-danger" hx-post="/vms/{{ .VM.Config.ID }}/eject-iso" hx-swap="none" onclick="setTimeout(() => location.reload(), 400)" title="Eject ISO medium from CD drive">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="5 15 12 8 19 15"></polyline>
-                                <line x1="5" y1="19" x2="19" y2="19"></line>
-                            </svg>
-                            <span>Eject / Remove ISO</span>
-                        </button>
-                        {{ else }}
-                        <form style="display: inline-flex; align-items: center; gap: 0.4rem;" hx-post="/vms/{{ .VM.Config.ID }}/attach-iso" hx-swap="none" onsubmit="setTimeout(() => location.reload(), 400)">
-                            <select name="iso" class="form-control" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" required>
-                                <option value="" disabled selected>Select an ISO...</option>
-                                {{ range .AvailableISOs }}
-                                <option value="{{ . }}">{{ . }}</option>
-                                {{ end }}
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-primary">Attach</button>
-                        </form>
-                        {{ end }}
-                    </td>
-                </tr>
-
-                <!-- Processors -->
-                <tr>
-                    <td class="property-name" style="font-weight: 600;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
-                                <rect x="9" y="9" width="6" height="6"></rect>
-                                <line x1="9" y1="1" x2="9" y2="4"></line>
-                                <line x1="15" y1="1" x2="15" y2="4"></line>
-                                <line x1="9" y1="20" x2="9" y2="23"></line>
-                                <line x1="15" y1="20" x2="15" y2="23"></line>
-                                <line x1="20" y1="9" x2="23" y2="9"></line>
-                                <line x1="20" y1="14" x2="23" y2="14"></line>
-                                <line x1="1" y1="9" x2="4" y2="9"></line>
-                                <line x1="1" y1="14" x2="4" y2="14"></line>
-                            </svg>
-                            <span>Processors (vCPU)</span>
-                        </div>
-                    </td>
-                    <td>
-                        <span>{{ .VM.Config.CPUs }} Cores</span>
-                        <span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 0.5rem;">(host passthrough mode)</span>
-                    </td>
-                    <td style="text-align: right;">
-                        {{ if ne .VM.Runtime.State "running" }}
-                        <form style="display: inline-flex; align-items: center; gap: 0.4rem;" action="/vms/{{ .VM.Config.ID }}/config" method="POST">
-                            <input type="number" name="cpus" value="{{ .VM.Config.CPUs }}" min="1" max="64" style="width: 65px; padding: 0.25rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);" required>
-                            <button type="submit" class="btn btn-sm">Edit</button>
-                        </form>
-                        {{ else }}
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">Stop VM to edit</span>
-                        {{ end }}
-                    </td>
-                </tr>
-
-                <!-- Memory -->
-                <tr>
-                    <td class="property-name" style="font-weight: 600;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M6 19v-3"></path>
-                                <path d="M10 19v-3"></path>
-                                <path d="M14 19v-3"></path>
-                                <path d="M18 19v-3"></path>
-                                <path d="M6 8V5"></path>
-                                <path d="M10 8V5"></path>
-                                <path d="M14 8V5"></path>
-                                <path d="M18 8V5"></path>
-                                <rect x="2" y="8" width="20" height="8" rx="2"></rect>
-                            </svg>
-                            <span>Memory (RAM)</span>
-                        </div>
-                    </td>
-                    <td>
-                        <span>{{ .VM.Config.MemoryMB }} MB</span>
-                        <span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 0.5rem;">({{ printf "%.2f" (div (float64 .VM.Config.MemoryMB) 1024.0) }} GB)</span>
-                    </td>
-                    <td style="text-align: right;">
-                        {{ if ne .VM.Runtime.State "running" }}
-                        <form style="display: inline-flex; align-items: center; gap: 0.4rem;" action="/vms/{{ .VM.Config.ID }}/config" method="POST">
-                            <input type="number" name="memory_mb" value="{{ .VM.Config.MemoryMB }}" min="128" step="128" style="width: 80px; padding: 0.25rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);" required>
-                            <button type="submit" class="btn btn-sm">Edit</button>
-                        </form>
-                        {{ else }}
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">Stop VM to edit</span>
-                        {{ end }}
-                    </td>
-                </tr>
-
-                <!-- Hard Disk -->
-                <tr>
-                    <td class="property-name" style="font-weight: 600;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="22" y1="12" x2="2" y2="12"></line>
-                                <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
-                                <line x1="6" y1="16" x2="6.01" y2="16"></line>
-                                <line x1="10" y1="16" x2="10.01" y2="16"></line>
-                            </svg>
-                            <span>Hard Disk (virtio0)</span>
-                        </div>
-                    </td>
-                    <td>
-                        <div>
-                            <span style="font-family: monospace;">{{ .VM.Config.Disk }}</span>
-                            <span class="badge badge-subtle" style="text-transform: uppercase;">{{ .VM.Config.DiskFormat }}</span>
-                            <span style="margin-left: 0.5rem;">Allocated: <strong>{{ if .VM.Config.DiskSize }}{{ .VM.Config.DiskSize }}{{ else }}Default{{ end }}</strong></span>
-                        </div>
-                        {{ if .DiskInfo }}
-                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
-                            Host disk usage: {{ printf "%.2f" (div (float64 .DiskInfo.ActualSize) 1048576.0) }} MB
-                        </div>
-                        {{ end }}
-                    </td>
-                    <td style="text-align: right;">
-                        {{ if ne .VM.Runtime.State "running" }}
-                        <form style="display: inline-flex; align-items: center; gap: 0.4rem;" action="/vms/{{ .VM.Config.ID }}/resize-disk" method="POST">
-                            <input type="text" name="size" placeholder="+5G" style="width: 65px; padding: 0.25rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);" required title="Format: +5G, +10G, etc.">
-                            <button type="submit" class="btn btn-sm" title="Expand disk size">Resize</button>
-                        </form>
-                        {{ else }}
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">Stop VM to resize</span>
-                        {{ end }}
-                    </td>
-                </tr>
-
-                <!-- Network -->
-                <tr>
-                    <td class="property-name" style="font-weight: 600;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <line x1="2" y1="12" x2="22" y2="12"></line>
-                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                            </svg>
-                            <span>Network Device (net0)</span>
-                        </div>
-                    </td>
-                    <td>
-                        <div>VirtIO Net (User Mode)</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
-                            {{ if gt .VM.Config.Network.SSHPort 0 }}SSH forwarded: Host :{{ .VM.Config.Network.SSHPort }} &rarr; Guest 22{{ else }}No SSH port forwarded{{ end }}
-                            {{ if .VM.Config.Network.Ports }} | {{ len .VM.Config.Network.Ports }} custom port forwards{{ end }}
-                        </div>
-                    </td>
-                    <td style="text-align: right;">
-                        {{ if ne .VM.Runtime.State "running" }}
-                        <form style="display: inline-flex; align-items: center; gap: 0.4rem;" action="/vms/{{ .VM.Config.ID }}/config" method="POST">
-                            <input type="number" name="ssh_port" value="{{ .VM.Config.Network.SSHPort }}" placeholder="SSH Port" style="width: 80px; padding: 0.25rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-                            <button type="submit" class="btn btn-sm">Save</button>
-                        </form>
-                        {{ else }}
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">Stop VM to edit</span>
-                        {{ end }}
-                    </td>
-                </tr>
-
-                <!-- Firmware -->
-                <tr>
-                    <td class="property-name" style="font-weight: 600;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                            </svg>
-                            <span>BIOS / Firmware</span>
-                        </div>
-                    </td>
-                    <td>
-                        <span style="text-transform: uppercase;">{{ .VM.Config.Firmware }}</span>
-                        <span style="color: var(--text-muted); font-size: 0.8rem; margin-left: 0.5rem;">{{ if eq .VM.Config.Firmware "uefi" }}OVMF UEFI Firmware with NVRAM{{ else }}SeaBIOS Standard Legacy{{ end }}</span>
-                    </td>
-                    <td style="text-align: right;">
-                        {{ if ne .VM.Runtime.State "running" }}
-                        <form style="display: inline-flex; align-items: center; gap: 0.4rem;" action="/vms/{{ .VM.Config.ID }}/config" method="POST">
-                            <select name="firmware" style="padding: 0.25rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-                                <option value="bios" {{ if eq .VM.Config.Firmware "bios" }}selected{{ end }}>BIOS (SeaBIOS)</option>
-                                <option value="uefi" {{ if eq .VM.Config.Firmware "uefi" }}selected{{ end }}>UEFI (OVMF)</option>
-                            </select>
-                            <button type="submit" class="btn btn-sm">Save</button>
-                        </form>
-                        {{ else }}
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">Stop VM to edit</span>
-                        {{ end }}
-                    </td>
-                </tr>
-            </tbody>
-        </table>
     </div>
 </div>
 
-<!-- ================= TAB 3: OPTIONS ================= -->
+<!-- ================= TAB 2: OPTIONS ================= -->
 <div class="pve-tab-content" id="tab-options">
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">VM Options & Boot Configuration</h3>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">Configure startup priorities and guest behavior</span>
+    <div class="vm-summary-layout">
+        <!-- Pane 1: Hardware -->
+        <div class="vm-summary-pane vm-hardware-pane">
+            <div class="card vm-details-card">
+                <div class="card-header">
+                    <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                            <rect x="9" y="9" width="6" height="6"></rect>
+                            <line x1="9" y1="1" x2="9" y2="4"></line>
+                            <line x1="15" y1="1" x2="15" y2="4"></line>
+                            <line x1="9" y1="20" x2="9" y2="23"></line>
+                            <line x1="15" y1="20" x2="15" y2="23"></line>
+                            <line x1="20" y1="9" x2="23" y2="9"></line>
+                            <line x1="20" y1="14" x2="23" y2="14"></line>
+                            <line x1="1" y1="9" x2="4" y2="9"></line>
+                            <line x1="1" y1="14" x2="4" y2="14"></line>
+                        </svg>
+                        <span>Hardware</span>
+                    </h3>
+                </div>
+                <table class="pve-table vm-details-table vm-hardware-table">
+                    <tbody>
+                        <!-- CD/DVD Drive -->
+                        <tr>
+                            <td class="property-name">CD/DVD Drive</td>
+                            <td style="text-align: right;">
+                                {{ if .VM.Config.ISO }}
+                                <div style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-family: var(--font-mono); color: var(--accent); font-weight: 500;">{{ .VM.Config.ISO }}</span>
+                                    <button class="btn btn-sm btn-danger" hx-post="/vms/{{ .VM.Config.ID }}/eject-iso" hx-swap="none" onclick="setTimeout(() => location.reload(), 400)" title="Eject ISO medium">
+                                        Eject
+                                    </button>
+                                </div>
+                                {{ else }}
+                                <form style="display: inline-flex; align-items: center; gap: 0.35rem;" hx-post="/vms/{{ .VM.Config.ID }}/attach-iso" hx-swap="none" onsubmit="setTimeout(() => location.reload(), 400)">
+                                    <select name="iso" class="form-control" style="padding: 0.2rem 0.4rem; font-size: 0.8rem; border-radius: 0;" required>
+                                        <option value="" disabled selected>Select ISO...</option>
+                                        {{ range .AvailableISOs }}
+                                        <option value="{{ . }}">{{ . }}</option>
+                                        {{ end }}
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary">Attach</button>
+                                </form>
+                                {{ end }}
+                            </td>
+                        </tr>
+
+                        <!-- Processors -->
+                        <tr>
+                            <td class="property-name">Processors (vCPU)</td>
+                            <td style="text-align: right;">
+                                <form style="display: inline-flex; align-items: center; gap: 0.35rem;" action="/vms/{{ .VM.Config.ID }}/config" method="POST">
+                                    <input type="number" name="cpus" value="{{ .VM.Config.CPUs }}" min="1" max="64" style="width: 60px; padding: 0.2rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" required {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to edit"{{ end }}>
+                                    <button type="submit" class="btn btn-sm" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to edit"{{ end }}>Edit</button>
+                                </form>
+                            </td>
+                        </tr>
+
+                        <!-- Memory -->
+                        <tr>
+                            <td class="property-name">Memory (RAM)</td>
+                            <td style="text-align: right;">
+                                <form style="display: inline-flex; align-items: center; gap: 0.35rem;" action="/vms/{{ .VM.Config.ID }}/config" method="POST">
+                                    <input type="number" name="memory_mb" value="{{ .VM.Config.MemoryMB }}" min="128" step="128" style="width: 75px; padding: 0.2rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" required {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to edit"{{ end }}>
+                                    <span style="font-size: 0.8rem; color: var(--text-muted);">MB</span>
+                                    <button type="submit" class="btn btn-sm" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to edit"{{ end }}>Edit</button>
+                                </form>
+                            </td>
+                        </tr>
+
+                        <!-- Hard Disk -->
+                        <tr>
+                            <td class="property-name">Hard Disk (virtio0)</td>
+                            <td style="text-align: right;">
+                                <form style="display: inline-flex; align-items: center; gap: 0.35rem;" action="/vms/{{ .VM.Config.ID }}/resize-disk" method="POST">
+                                    <input type="text" name="size" placeholder="+5G" style="width: 60px; padding: 0.2rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" required title="Format: +5G, +10G, etc." {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to resize"{{ end }}>
+                                    <button type="submit" class="btn btn-sm" title="Expand disk size" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to resize"{{ end }}>Resize</button>
+                                </form>
+                            </td>
+                        </tr>
+
+                        <!-- Network -->
+                        <tr>
+                            <td class="property-name">Network (net0)</td>
+                            <td style="text-align: right;">
+                                <form style="display: inline-flex; align-items: center; gap: 0.35rem;" action="/vms/{{ .VM.Config.ID }}/config" method="POST">
+                                    <span style="font-size: 0.8rem; color: var(--text-muted);">SSH:</span>
+                                    <input type="number" name="ssh_port" value="{{ if gt .VM.Config.Network.SSHPort 0 }}{{ .VM.Config.Network.SSHPort }}{{ end }}" placeholder="e.g. 2222" style="width: 80px; padding: 0.2rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to edit"{{ end }}>
+                                    <button type="submit" class="btn btn-sm" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to edit"{{ end }}>Save</button>
+                                </form>
+                            </td>
+                        </tr>
+
+                        <!-- Firmware -->
+                        <tr>
+                            <td class="property-name">BIOS / Firmware</td>
+                            <td style="text-align: right;">
+                                <form style="display: inline-flex; align-items: center; gap: 0.35rem;" action="/vms/{{ .VM.Config.ID }}/config" method="POST">
+                                    <select name="firmware" style="padding: 0.2rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to edit"{{ end }}>
+                                        <option value="bios" {{ if eq .VM.Config.Firmware "bios" }}selected{{ end }}>BIOS</option>
+                                        <option value="uefi" {{ if eq .VM.Config.Firmware "uefi" }}selected{{ end }}>UEFI</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to edit"{{ end }}>Save</button>
+                                </form>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <form action="/vms/{{ .VM.Config.ID }}/config" method="POST">
+
+        <!-- Pane 2: Options -->
+        <div class="vm-summary-pane vm-options-pane">
+            <div class="card vm-details-card">
+                <div class="card-header">
+                    <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
+                        <span>Options</span>
+                    </h3>
+                </div>
+                <form action="/vms/{{ .VM.Config.ID }}/config" method="POST" style="display: flex; flex-direction: column; height: 100%;">
+                    <table class="pve-table vm-details-table vm-options-table">
+                        <tbody>
+                            <!-- Display Name -->
+                            <tr>
+                                <td class="property-name">Display Name</td>
+                                <td style="text-align: right;">
+                                    <input type="text" name="name" value="{{ .VM.Config.Name }}" class="form-control" style="width: 160px; padding: 0.2rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" required>
+                                </td>
+                            </tr>
+
+                            <!-- Boot Device Priority -->
+                            <tr>
+                                <td class="property-name">Boot Order</td>
+                                <td style="text-align: right;">
+                                    <select name="boot_order" class="form-control" style="width: 160px; padding: 0.2rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;">
+                                        <option value="" {{ if eq .VM.Config.BootOrder "" }}selected{{ end }}>Auto (ISO/Disk)</option>
+                                        <option value="c" {{ if eq .VM.Config.BootOrder "c" }}selected{{ end }}>Disk first (c)</option>
+                                        <option value="d" {{ if eq .VM.Config.BootOrder "d" }}selected{{ end }}>CD first (d)</option>
+                                        <option value="dc" {{ if eq .VM.Config.BootOrder "dc" }}selected{{ end }}>CD then Disk (dc)</option>
+                                        <option value="cd" {{ if eq .VM.Config.BootOrder "cd" }}selected{{ end }}>Disk then CD (cd)</option>
+                                    </select>
+                                </td>
+                            </tr>
+
+                            <!-- OS Type -->
+                            <tr>
+                                <td class="property-name">OS Type</td>
+                                <td style="text-align: right;">
+                                    <select name="os_type" class="form-control" style="width: 160px; padding: 0.2rem 0.4rem; font-size: 0.8rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;">
+                                        <option value="Linux" {{ if eq .VM.Config.OSType "Linux" }}selected{{ end }}>Linux</option>
+                                        <option value="Debian" {{ if eq .VM.Config.OSType "Debian" }}selected{{ end }}>Debian/Ubuntu</option>
+                                        <option value="Alpine" {{ if eq .VM.Config.OSType "Alpine" }}selected{{ end }}>Alpine Linux</option>
+                                        <option value="Windows" {{ if eq .VM.Config.OSType "Windows" }}selected{{ end }}>Windows</option>
+                                        <option value="Other" {{ if eq .VM.Config.OSType "Other" }}selected{{ end }}>Other</option>
+                                    </select>
+                                </td>
+                            </tr>
+
+                            <!-- Autostart -->
+                            <tr>
+                                <td class="property-name">Autostart</td>
+                                <td style="text-align: right;">
+                                    <label style="display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.8rem;">
+                                        <input type="checkbox" name="autostart" value="true" {{ if .VM.Config.Autostart }}checked{{ end }}>
+                                        <span>On host boot</span>
+                                    </label>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: auto; padding: 0.75rem 1.25rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; align-items: center; background-color: var(--panel);">
+                        <button type="submit" class="btn btn-sm btn-primary" style="border-radius: 0;">Save Options</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Snapshots Section -->
+    <div style="margin-top: 1.25rem;">
+        <div class="card vm-details-card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                        <circle cx="12" cy="13" r="4"></circle>
+                    </svg>
+                    <span>Snapshots ({{ len .Snapshots }})</span>
+                </h3>
+                <form action="/vms/{{ .VM.Config.ID }}/snapshots" method="POST" style="display: inline-flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                    <input type="text" name="name" placeholder="Snapshot name (e.g. clean-install)" class="form-control" style="width: 200px; padding: 0.2rem 0.5rem; font-size: 0.8rem; border-radius: 0;" required pattern="[a-zA-Z0-9._-]+" title="Alphanumeric, ., _, -">
+                    <input type="text" name="description" placeholder="Description (optional)" class="form-control" style="width: 220px; padding: 0.2rem 0.5rem; font-size: 0.8rem; border-radius: 0;">
+                    <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 0;">Take Snapshot</button>
+                </form>
+            </div>
+            {{ if .Snapshots }}
             <table class="pve-table">
                 <thead>
                     <tr>
-                        <th style="width: 220px;">Option Name</th>
-                        <th>Current Value</th>
-                        <th style="width: 320px;">New Setting</th>
+                        <th>Snapshot Name</th>
+                        <th>Date Taken</th>
+                        <th>VM State Size</th>
+                        <th style="text-align: right;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
+                    {{ range .Snapshots }}
                     <tr>
-                        <td class="property-name" style="font-weight: 600;">Boot Device Priority</td>
-                        <td>
-                            <code>{{ if .VM.Config.BootOrder }}{{ .VM.Config.BootOrder }}{{ else }}Default (CD first if media loaded, else Disk){{ end }}</code>
-                        </td>
-                        <td>
-                            <select name="boot_order" class="form-control" style="padding: 0.3rem 0.5rem; font-size: 0.85rem;">
-                                <option value="" {{ if eq .VM.Config.BootOrder "" }}selected{{ end }}>Auto (ISO first if attached, else Disk)</option>
-                                <option value="c" {{ if eq .VM.Config.BootOrder "c" }}selected{{ end }}>Hard Disk first (order=c)</option>
-                                <option value="d" {{ if eq .VM.Config.BootOrder "d" }}selected{{ end }}>CD-ROM first (order=d)</option>
-                                <option value="dc" {{ if eq .VM.Config.BootOrder "dc" }}selected{{ end }}>CD-ROM then Disk (order=dc)</option>
-                                <option value="cd" {{ if eq .VM.Config.BootOrder "cd" }}selected{{ end }}>Disk then CD-ROM (order=cd)</option>
-                            </select>
+                        <td style="font-weight: 600; font-family: monospace;">{{ .Name }}</td>
+                        <td style="color: var(--text-muted);">{{ .Date.Format "2006-01-02 15:04:05" }}</td>
+                        <td>{{ if gt .VMStateSize 0 }}{{ printf "%.1f MB" (div (float64 .VMStateSize) 1048576.0) }}{{ else }}Disk Only{{ end }}</td>
+                        <td style="text-align: right;">
+                            <form style="display: inline;" action="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/rollback" method="POST" onsubmit="return confirm('Rollback VM disk to snapshot \'{{ .Name }}\'? Any unsaved changes will be lost.');">
+                                <button type="submit" class="btn btn-sm btn-outline" style="border-radius: 0;" title="Revert disk state to this snapshot">Rollback</button>
+                            </form>
+                            <form style="display: inline; margin-left: 0.4rem;" action="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/delete" method="POST" onsubmit="return confirm('Permanently delete snapshot \'{{ .Name }}\'?');">
+                                <button type="submit" class="btn btn-sm btn-danger" style="border-radius: 0;" title="Delete snapshot">Delete</button>
+                            </form>
                         </td>
                     </tr>
-                    <tr>
-                        <td class="property-name" style="font-weight: 600;">OS Type / Guest Type</td>
-                        <td>{{ if .VM.Config.OSType }}{{ .VM.Config.OSType }}{{ else }}Generic Linux{{ end }}</td>
-                        <td>
-                            <select name="os_type" class="form-control" style="padding: 0.3rem 0.5rem; font-size: 0.85rem;">
-                                <option value="Linux" {{ if eq .VM.Config.OSType "Linux" }}selected{{ end }}>Linux (2.6/3.x/4.x/5.x/6.x)</option>
-                                <option value="Debian" {{ if eq .VM.Config.OSType "Debian" }}selected{{ end }}>Debian / Ubuntu</option>
-                                <option value="Alpine" {{ if eq .VM.Config.OSType "Alpine" }}selected{{ end }}>Alpine Linux</option>
-                                <option value="Windows" {{ if eq .VM.Config.OSType "Windows" }}selected{{ end }}>Microsoft Windows</option>
-                                <option value="Other" {{ if eq .VM.Config.OSType "Other" }}selected{{ end }}>Other / Custom</option>
-                            </select>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="property-name" style="font-weight: 600;">Autostart on Boot</td>
-                        <td>{{ if .VM.Config.Autostart }}<span style="color: #3fb950; font-weight: 600;">Enabled</span>{{ else }}<span style="color: var(--text-muted);">Disabled</span>{{ end }}</td>
-                        <td>
-                            <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                <input type="checkbox" name="autostart" value="true" {{ if .VM.Config.Autostart }}checked{{ end }}>
-                                <span>Start automatically when host launches</span>
-                            </label>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="property-name" style="font-weight: 600;">Display Name</td>
-                        <td>{{ .VM.Config.Name }}</td>
-                        <td>
-                            <input type="text" name="name" value="{{ .VM.Config.Name }}" class="form-control" style="padding: 0.3rem 0.5rem; font-size: 0.85rem;" required>
-                        </td>
-                    </tr>
+                    {{ end }}
                 </tbody>
             </table>
-            <div style="margin-top: 1rem; text-align: right;">
-                <button type="submit" class="btn btn-primary btn-sm">Save Options</button>
+            {{ else }}
+            <div style="text-align: center; padding: 2rem 1rem; color: var(--text-muted);">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.4; margin-bottom: 0.35rem;">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+                <p style="margin: 0; font-size: 0.85rem;">No snapshots taken yet.</p>
+                <p style="margin: 0.2rem 0 0; font-size: 0.75rem;">Snapshots let you preserve the virtual disk at a point in time and rollback anytime.</p>
             </div>
-        </form>
+            {{ end }}
+        </div>
     </div>
 
-    <!-- Clone Box -->
-    <div class="card" style="margin-top: 1.5rem;">
-        <div class="card-header">
-            <h3 class="card-title">Clone Virtual Machine</h3>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">Create a full standalone copy of this VM and its disks</span>
-        </div>
-        {{ if eq .VM.Runtime.State "running" }}
-        <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">VM must be shut down before creating a clone.</p>
-        {{ else }}
-        <form action="/vms/{{ .VM.Config.ID }}/clone" method="POST" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-            <input type="text" name="new_id" placeholder="New VM ID (e.g. vm-{{ .VM.Config.ID }}-clone)" class="form-control" style="max-width: 260px; font-size: 0.85rem;" required>
-            <input type="text" name="new_name" placeholder="New VM Display Name" class="form-control" style="max-width: 260px; font-size: 0.85rem;" required>
-            <button type="submit" class="btn btn-primary btn-sm">Clone VM</button>
-        </form>
-        {{ end }}
-    </div>
-</div>
-
-<!-- ================= TAB 4: SNAPSHOTS ================= -->
-<div class="pve-tab-content" id="tab-snapshots">
-    <!-- Take Snapshot Box -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">Take VM Snapshot</h3>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">Save instant restore point of this VM's disk</span>
-        </div>
-        <form action="/vms/{{ .VM.Config.ID }}/snapshots" method="POST" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-            <input type="text" name="name" placeholder="Snapshot name (e.g. clean-install)" class="form-control" style="max-width: 240px; font-size: 0.85rem;" required pattern="[a-zA-Z0-9._-]+" title="Alphanumeric, ., _, -">
-            <input type="text" name="description" placeholder="Description (optional)" class="form-control" style="max-width: 320px; font-size: 0.85rem;">
-            <button type="submit" class="btn btn-primary btn-sm">Take Snapshot</button>
-        </form>
-    </div>
-
-    <!-- Snapshots List -->
-    <div class="card" style="margin-top: 1.5rem;">
-        <div class="card-header">
-            <h3 class="card-title">Snapshots List</h3>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">Total: {{ len .Snapshots }} snapshot(s)</span>
-        </div>
-        {{ if .Snapshots }}
-        <table class="pve-table">
-            <thead>
-                <tr>
-                    <th>Snapshot Name</th>
-                    <th>Date Taken</th>
-                    <th>VM State Size</th>
-                    <th style="text-align: right;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{ range .Snapshots }}
-                <tr>
-                    <td style="font-weight: 600; font-family: monospace;">{{ .Name }}</td>
-                    <td style="color: var(--text-muted);">{{ .Date.Format "2006-01-02 15:04:05" }}</td>
-                    <td>{{ if gt .VMStateSize 0 }}{{ printf "%.1f MB" (div (float64 .VMStateSize) 1048576.0) }}{{ else }}Disk Only{{ end }}</td>
-                    <td style="text-align: right;">
-                        <form style="display: inline;" action="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/rollback" method="POST" onsubmit="return confirm('Rollback VM disk to snapshot \'{{ .Name }}\'? Any unsaved changes will be lost.');">
-                            <button type="submit" class="btn btn-sm btn-outline" title="Revert disk state to this snapshot">Rollback</button>
-                        </form>
-                        <form style="display: inline; margin-left: 0.4rem;" action="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/delete" method="POST" onsubmit="return confirm('Permanently delete snapshot \'{{ .Name }}\'?');">
-                            <button type="submit" class="btn btn-sm btn-danger" title="Delete snapshot">Delete</button>
-                        </form>
-                    </td>
-                </tr>
+    <!-- Clone Virtual Machine Box -->
+    <div style="margin-top: 1.25rem;">
+        <div class="card vm-details-card">
+            <div class="card-header">
+                <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span>Clone Virtual Machine</span>
+                </h3>
+            </div>
+            <div style="padding: 1rem 1.25rem;">
+                {{ if eq .VM.Runtime.State "running" }}
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">VM must be shut down before creating a clone.</p>
+                {{ else }}
+                <form action="/vms/{{ .VM.Config.ID }}/clone" method="POST" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                    <input type="text" name="new_id" placeholder="New VM ID (e.g. vm-{{ .VM.Config.ID }}-clone)" class="form-control" style="max-width: 260px; font-size: 0.85rem; border-radius: 0;" required>
+                    <input type="text" name="new_name" placeholder="New VM Display Name" class="form-control" style="max-width: 260px; font-size: 0.85rem; border-radius: 0;" required>
+                    <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 0;">Clone VM</button>
+                </form>
                 {{ end }}
-            </tbody>
-        </table>
-        {{ else }}
-        <div style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.4; margin-bottom: 0.5rem;">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                <circle cx="12" cy="13" r="4"></circle>
-            </svg>
-            <p style="margin: 0; font-size: 0.9rem;">No snapshots taken yet.</p>
-            <p style="margin: 0.25rem 0 0; font-size: 0.8rem;">Snapshots let you preserve the virtual disk at a point in time and rollback anytime.</p>
+            </div>
         </div>
-        {{ end }}
     </div>
 </div>
 
@@ -602,6 +504,9 @@
             }
         });
         history.replaceState(null, '', '#' + tabId);
+        if (tabId === 'summary' && typeof renderVMTelemetryCharts === 'function') {
+            requestAnimationFrame(() => renderVMTelemetryCharts(false));
+        }
     }
 
     tabs.forEach(t => {
@@ -610,7 +515,16 @@
         });
     });
 
-    const currentHash = window.location.hash.replace('#', '');
+    window.addEventListener('hashchange', () => {
+        let h = window.location.hash.replace('#', '');
+        if (h === 'hardware' || h === 'snapshots') h = 'options';
+        if (h && document.getElementById('tab-' + h)) {
+            selectTab(h);
+        }
+    });
+
+    let currentHash = window.location.hash.replace('#', '');
+    if (currentHash === 'hardware' || currentHash === 'snapshots') currentHash = 'options';
     if (currentHash && document.getElementById('tab-' + currentHash)) {
         selectTab(currentHash);
     }

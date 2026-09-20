@@ -1,61 +1,54 @@
 {{ define "vm-card" }}
-<div class="vm-card" id="vm-card-{{ .ID }}">
-    <div class="vm-card-header">
+<div class="vm-card vm-table-row" id="vm-card-{{ .ID }}">
+    <div class="vm-td vm-col-status">
+        <span class="vm-status-indicator status-{{ .StatusClass }}" title="Status: {{ .Status }}" aria-label="{{ .Status }}"></span>
+    </div>
+
+    <div class="vm-td vm-col-name">
         <div class="vm-title-group">
             <a href="/vms/{{ .ID }}" class="vm-name" title="{{ .Name }}">{{ .Name }}</a>
             {{ if ne .Name .ID }}
             <span class="vm-id-tag">{{ .ID }}</span>
             {{ end }}
         </div>
-        <span class="vm-status-indicator status-{{ .StatusClass }}" title="Status: {{ .Status }}" aria-label="{{ .Status }}"></span>
     </div>
 
-    <div class="vm-specs">
-        <div class="vm-spec-item">
-            <span class="vm-spec-label">vCPU</span>
-            <span class="vm-spec-val">{{ .CPUs }}</span>
-        </div>
-        <div class="vm-spec-item">
-            <span class="vm-spec-label">Memory</span>
-            <span class="vm-spec-val">{{ .MemoryMB }} MB</span>
-        </div>
-        <div class="vm-spec-item">
-            <span class="vm-spec-label">Disk</span>
-            <span class="vm-spec-val">{{ .DiskSize }}</span>
-        </div>
-        {{ if .SSHPort }}
-        <div class="vm-spec-item">
-            <span class="vm-spec-label">SSH</span>
-            <span class="vm-spec-val">:{{ .SSHPort }}</span>
-        </div>
-        {{ end }}
+    <div class="vm-td vm-col-pid vm-cell-mono">
+        {{ if .IsRunning }}<span class="vm-field-label">PID:</span>{{ .PID }}{{ else }}<span class="text-muted">—</span>{{ end }}
     </div>
 
-    <div class="vm-card-footer">
-        <div class="vm-runtime-info">
-            <div class="vm-runtime-item">
-                <span class="vm-runtime-label">PID:</span>
-                <span class="vm-runtime-val">{{ if .IsRunning }}{{ .PID }}{{ else }}0{{ end }}</span>
-            </div>
-            <div class="vm-runtime-item">
-                <span class="vm-runtime-label">CPU:</span>
-                <span class="vm-runtime-val">{{ if .IsRunning }}{{ printf "%.1f" .CPUPercent }}%{{ else }}0%{{ end }}</span>
-            </div>
-            <div class="vm-runtime-item">
-                <span class="vm-runtime-label">RAM:</span>
-                <span class="vm-runtime-val">{{ if and .IsRunning .MemUsedMB }}{{ .MemUsedMB }} MB{{ else }}0 MB{{ end }}</span>
-            </div>
-            {{ if and .IsRunning .Uptime }}
-            <div class="vm-runtime-item">
-                <span class="vm-runtime-label">Uptime:</span>
-                <span class="vm-runtime-val">{{ .Uptime }}</span>
-            </div>
-            {{ end }}
-        </div>
+    <div class="vm-td vm-col-cpu vm-cell-mono">
+        {{ if .IsRunning }}<span class="vm-field-label">CPU:</span>{{ printf "%.1f" .CPUPercent }}%{{ else }}<span class="text-muted">—</span>{{ end }}
+    </div>
 
-        <div class="vm-actions">
+    <div class="vm-td vm-col-ram vm-cell-mono">
+        {{ if and .IsRunning .MemUsedMB }}<span class="vm-field-label">RAM:</span>{{ .MemUsedMB }} MB{{ else if .IsRunning }}<span class="vm-field-label">RAM:</span>0 MB{{ else }}<span class="text-muted">—</span>{{ end }}
+    </div>
+
+    <div class="vm-td vm-col-uptime vm-cell-mono">
+        {{ if and .IsRunning .Uptime }}<span class="vm-field-label">Uptime:</span>{{ .Uptime }}{{ else if .IsRunning }}<span class="vm-field-label">Uptime:</span>0s{{ else }}<span class="text-muted">—</span>{{ end }}
+    </div>
+
+    <div class="vm-td vm-col-actions">
+        <div class="vm-actions-group">
+            <button class="btn btn-sm btn-icon btn-action-start" hx-post="/vms/{{ .ID }}/start" hx-target="#vm-card-{{ .ID }}" hx-swap="outerHTML" title="Start VM" aria-label="Start" {{ if .IsRunning }}disabled{{ end }}>
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+            </button>
+            <button class="btn btn-sm btn-icon btn-action-restart" hx-post="/vms/{{ .ID }}/restart" hx-target="#vm-card-{{ .ID }}" hx-swap="outerHTML" title="Restart VM" aria-label="Restart" {{ if not .IsRunning }}disabled{{ end }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+            </button>
+            <button class="btn btn-sm btn-icon btn-action-stop" hx-post="/vms/{{ .ID }}/stop" hx-target="#vm-card-{{ .ID }}" hx-swap="outerHTML" title="Stop VM" aria-label="Stop" {{ if not .IsRunning }}disabled{{ end }}>
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="6" y="6" width="12" height="12" rx="0"></rect>
+                </svg>
+            </button>
             <button class="btn btn-sm btn-danger btn-icon" hx-delete="/vms/{{ .ID }}?force=true" hx-target="#vm-card-{{ .ID }}" hx-swap="outerHTML" hx-confirm="Permanently delete VM '{{ .Name }}'?" title="Delete VM" aria-label="Delete">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
