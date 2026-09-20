@@ -62,13 +62,23 @@ func (s *Server) LoggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(rec, r)
 
 		duration := time.Since(start)
-		s.logger.Info("HTTP request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", rec.statusCode,
-			"duration_ms", duration.Milliseconds(),
-			"remote_addr", r.RemoteAddr,
-		)
+		if rec.statusCode >= 500 {
+			s.logger.Error("HTTP request failed",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", rec.statusCode,
+				"duration_ms", duration.Milliseconds(),
+				"remote_addr", r.RemoteAddr,
+			)
+		} else {
+			s.logger.Info("HTTP request",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", rec.statusCode,
+				"duration_ms", duration.Milliseconds(),
+				"remote_addr", r.RemoteAddr,
+			)
+		}
 	})
 }
 

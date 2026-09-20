@@ -1,6 +1,8 @@
 package config
 
 import (
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,8 +16,11 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Listen != "0.0.0.0" {
 		t.Errorf("expected default listen 0.0.0.0, got %s", cfg.Listen)
 	}
-	if cfg.LogLevel != "info" {
-		t.Errorf("expected default log level 'info', got %s", cfg.LogLevel)
+	if cfg.LogLevel != "error" {
+		t.Errorf("expected default log level 'error', got %s", cfg.LogLevel)
+	}
+	if cfg.Verbose != false {
+		t.Errorf("expected default verbose false, got %v", cfg.Verbose)
 	}
 	if cfg.Addr() != "0.0.0.0:8080" {
 		t.Errorf("expected addr '0.0.0.0:8080', got %s", cfg.Addr())
@@ -93,5 +98,55 @@ func TestEnsureDirs(t *testing.T) {
 		} else if !info.IsDir() {
 			t.Errorf("%s is not a directory", dir)
 		}
+	}
+}
+
+func TestLoad_VerboseFlags(t *testing.T) {
+	for _, arg := range []string{"-verbose", "--verbose", "-v"} {
+		cfg, _, err := Load([]string{arg})
+		if err != nil {
+			t.Fatalf("Load([%s]) returned error: %v", arg, err)
+		}
+		if !cfg.Verbose {
+			t.Errorf("Load([%s]) expected Verbose=true, got false", arg)
+		}
+		logger := cfg.SetupLogger()
+		if !logger.Enabled(context.Background(), slog.LevelInfo) {
+			t.Errorf("expected Info level enabled with %s", arg)
+		}
+	}
+}
+
+func TestLoad_VerboseEnv(t *testing.T) {
+	os.Setenv("TINYVM_VERBOSE", "1")
+	defer os.Unsetenv("TINYVM_VERBOSE")
+
+	cfg, _, err := Load([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Verbose {
+		t.Errorf("expected Verbose=true from env TINYVM_VERBOSE=1, got false")
+	}
+
+	logger := cfg.SetupLogger()
+	if !logger.Enabled(context.Background(), slog.LevelInfo) {
+		t.Errorf("expected Info level enabled with TINYVM_VERBOSE=1")
+	}
+}
+
+func TestDefaultLogger_OnlyErrors(t *testing.T) {
+	cfg := DefaultConfig()
+	logger := cfg.SetupLogger()
+
+	ctx := context.Background()
+	if logger.Enabled(ctx, slog.LevelInfo) {
+		t.Errorf("default logger should not enable Info level")
+	}
+	if logger.Enabled(ctx, slog.LevelWarn) {
+		t.Errorf("default logger should not enable Warn level")
+	}
+	if !logger.Enabled(ctx, slog.LevelError) {
+		t.Errorf("default logger must enable Error level")
 	}
 }

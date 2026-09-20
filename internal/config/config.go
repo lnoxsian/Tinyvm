@@ -18,6 +18,7 @@ type Config struct {
 	LogLevel  string `json:"log_level"`
 	LogFormat string `json:"log_format"`
 	APIToken  string `json:"api_token,omitempty"`
+	Verbose   bool   `json:"verbose"`
 }
 
 // DefaultConfig returns a Config with standard defaults.
@@ -36,8 +37,9 @@ func DefaultConfig() *Config {
 		Listen:    "0.0.0.0",
 		Port:      8080,
 		DataDir:   dataDir,
-		LogLevel:  "info",
+		LogLevel:  "error",
 		LogFormat: "text",
+		Verbose:   false,
 	}
 }
 
@@ -112,6 +114,13 @@ func Load(args []string) (*Config, *flag.FlagSet, error) {
 	if env := getEnv("TINYVM_API_TOKEN", "MINIVM_API_TOKEN"); env != "" {
 		cfg.APIToken = env
 	}
+	if env := getEnv("TINYVM_VERBOSE", "MINIVM_VERBOSE"); env != "" {
+		if v, err := strconv.ParseBool(env); err == nil {
+			cfg.Verbose = v
+		} else if env == "1" {
+			cfg.Verbose = true
+		}
+	}
 
 	// FlagSet for CLI flags
 	fs := flag.NewFlagSet("tinyvm serve", flag.ContinueOnError)
@@ -121,6 +130,8 @@ func Load(args []string) (*Config, *flag.FlagSet, error) {
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: debug, info, warn, error")
 	fs.StringVar(&cfg.LogFormat, "log-format", cfg.LogFormat, "Log format: text or json")
 	fs.StringVar(&cfg.APIToken, "api-token", cfg.APIToken, "API bearer authentication token (optional)")
+	fs.BoolVar(&cfg.Verbose, "verbose", cfg.Verbose, "Enable verbose logging (shows info and warnings; default: errors only)")
+	fs.BoolVar(&cfg.Verbose, "v", cfg.Verbose, "Enable verbose logging (shorthand)")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, nil, err
@@ -135,11 +146,17 @@ func (c *Config) SetupLogger() *slog.Logger {
 	switch strings.ToLower(c.LogLevel) {
 	case "debug":
 		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
 	case "warn", "warning":
 		level = slog.LevelWarn
 	case "error":
 		level = slog.LevelError
 	default:
+		level = slog.LevelError
+	}
+
+	if c.Verbose && level > slog.LevelInfo {
 		level = slog.LevelInfo
 	}
 

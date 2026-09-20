@@ -24,6 +24,8 @@
         const sshControls = document.getElementById('ssh-controls');
         const sshUserInput = document.getElementById('ssh-user-input');
         const sshModeSelect = document.getElementById('ssh-mode-select');
+        const btnSshConnect = document.getElementById('btn-ssh-connect');
+        const btnNovncStandalone = document.getElementById('btn-novnc-standalone');
         const btnCAD = document.getElementById('btn-cad');
         const btnReconnect = document.getElementById('btn-reconnect');
         const btnFullscreen = document.getElementById('btn-fullscreen');
@@ -37,6 +39,18 @@
         let sshTerm = null;
         let sshFit = null;
         let sshWS = null;
+        let lastCols = 0;
+        let lastRows = 0;
+
+        function sendResize(cols, rows) {
+            if (!cols || !rows) return;
+            if (cols === lastCols && rows === lastRows) return;
+            if (sshWS && sshWS.readyState === WebSocket.OPEN) {
+                lastCols = cols;
+                lastRows = rows;
+                sshWS.send(JSON.stringify({ type: 'resize', cols: cols, rows: rows }));
+            }
+        }
 
         function setStatus(state, msg) {
             if (!statusDot || !statusText) return;
@@ -95,14 +109,15 @@
             });
 
             sshTerm.onResize(size => {
-                if (sshWS && sshWS.readyState === WebSocket.OPEN) {
-                    sshWS.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
-                }
+                sendResize(size.cols, size.rows);
             });
         }
 
         function connectSSH() {
             initSSHTerminal();
+
+            lastCols = 0;
+            lastRows = 0;
 
             if (sshWS) {
                 try { sshWS.close(); } catch (e) {}
@@ -122,12 +137,11 @@
                     setStatus('connected', `Connected (${label})`);
                     if (sshFit) {
                         sshFit.fit();
-                        // Send current terminal dimensions to backend PTY
-                        if (sshTerm) {
-                            sshWS.send(JSON.stringify({ type: 'resize', cols: sshTerm.cols, rows: sshTerm.rows }));
-                        }
                     }
-                    if (sshTerm) sshTerm.focus();
+                    if (sshTerm) {
+                        sendResize(sshTerm.cols, sshTerm.rows);
+                        sshTerm.focus();
+                    }
                 }
             };
 
@@ -166,6 +180,11 @@
                 }
             });
         }
+        if (btnSshConnect) {
+            btnSshConnect.addEventListener('click', () => {
+                connectSSH();
+            });
+        }
 
         // --- Tab Switching ---
         function switchMode(mode) {
@@ -178,6 +197,7 @@
             if (paneSsh) paneSsh.classList.toggle('active', mode === 'ssh');
 
             if (btnCAD) btnCAD.style.display = (mode === 'vnc') ? 'inline-flex' : 'none';
+            if (btnNovncStandalone) btnNovncStandalone.style.display = (mode === 'vnc') ? 'inline-flex' : 'none';
             if (sshControls) sshControls.style.display = (mode === 'ssh') ? 'inline-flex' : 'none';
 
             if (mode === 'vnc') {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -53,12 +54,14 @@ Flags for 'serve':
   -data-dir string
         Data directory for VM storage and configs (default: /var/lib/tinyvm)
   -log-level string
-        Logging level: debug, info, warn, error (default: info)
+        Logging level: debug, info, warn, error (default: error)
   -log-format string
         Logging format: text, json (default: text)
+  --verbose, -v
+        Enable verbose mode: show informational logs (default: error only)
 
 Environment Variables:
-  TINYVM_LISTEN, TINYVM_PORT, TINYVM_DATA_DIR, TINYVM_LOG_LEVEL, TINYVM_LOG_FORMAT
+  TINYVM_LISTEN, TINYVM_PORT, TINYVM_DATA_DIR, TINYVM_LOG_LEVEL, TINYVM_LOG_FORMAT, TINYVM_VERBOSE
 `)
 }
 
@@ -72,7 +75,7 @@ func main() {
 
 	cmd := args[0]
 	switch cmd {
-	case "version", "-v", "--version":
+	case "version", "--version", "-V":
 		info := version.Get()
 		fmt.Printf("TinyVM v%s\n", info.Version)
 		fmt.Printf("  Commit:    %s\n", info.Commit)
@@ -744,7 +747,9 @@ func runServe(args []string) {
 			"cpu_virtualization", kvmStatus.CPUSupport,
 			"err", kvmStatus.Error,
 		)
-		fmt.Fprintf(os.Stderr, "\n[WARNING] %s\n\n", host.KVMUnavailableNotice())
+		if cfg.Verbose || logger.Enabled(context.Background(), slog.LevelWarn) {
+			fmt.Fprintf(os.Stderr, "\n[WARNING] %s\n\n", host.KVMUnavailableNotice())
+		}
 	}
 
 	vmMgr := vm.NewManager(store, launcher)

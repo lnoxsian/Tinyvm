@@ -238,3 +238,60 @@ func TestDashboard_HTMXLifecycleActions(t *testing.T) {
 		t.Errorf("expected empty body on HTMX delete, got %q", rec.Body.String())
 	}
 }
+
+func TestVMList_CreateButtonVisibility(t *testing.T) {
+	srv := newTestServer(t)
+
+	// 1. When 0 VMs exist:
+	req := httptest.NewRequest(http.MethodGet, "/vms", nil)
+	req.Header.Set("Accept", "text/html")
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on /vms, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="btn-create-vm" style="display: none;"`) {
+		t.Errorf("expected header Create VM button to be hidden (style='display: none;') when 0 VMs exist, body: %s", body)
+	}
+	if !strings.Contains(body, "No Virtual Machines Configured") {
+		t.Errorf("expected empty state when 0 VMs exist")
+	}
+
+	// 2. Create 1 VM:
+	_, err := srv.vmMgr.CreateVM(vm.VMConfig{
+		ID:         "test-vm-vis",
+		Name:       "Visibility Test VM",
+		CPUs:       1,
+		MemoryMB:   512,
+		DiskSize:   "10M",
+		DiskFormat: "qcow2",
+		Firmware:   "bios",
+	})
+	if err != nil {
+		t.Fatalf("failed to create test VM: %v", err)
+	}
+
+	// 3. When 1 VM exists:
+	req = httptest.NewRequest(http.MethodGet, "/vms", nil)
+	req.Header.Set("Accept", "text/html")
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on /vms, got %d", rec.Code)
+	}
+
+	bodyWithVM := rec.Body.String()
+	if strings.Contains(bodyWithVM, `id="btn-create-vm" style="display: none;"`) {
+		t.Errorf("expected header Create VM button to be visible when 1 VM exists, got: %s", bodyWithVM)
+	}
+	if !strings.Contains(bodyWithVM, `id="btn-create-vm"`) {
+		t.Errorf("expected header Create VM button to be present when 1 VM exists")
+	}
+	if !strings.Contains(bodyWithVM, "Visibility Test VM") {
+		t.Errorf("expected VM name to be in list")
+	}
+}

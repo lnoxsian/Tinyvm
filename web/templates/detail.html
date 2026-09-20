@@ -280,10 +280,11 @@
                         <option value="ssh">Guest SSH</option>
                         <option value="shell">Host Shell</option>
                     </select>
+                    <button type="button" class="btn btn-sm btn-primary" id="btn-ssh-connect" style="border-radius: 0; padding: 0.2rem 0.65rem; font-size: 0.78rem; font-weight: 500;" title="Connect or reconnect terminal session">Connect</button>
                 </div>
 
                 <!-- Standalone noVNC link (external window) -->
-                <a href="/vms/{{ .VM.Config.ID }}/novnc" target="_blank" class="btn btn-sm" title="Launch standalone full noVNC application in a new tab" style="border-radius: 0;">
+                <a href="/vms/{{ .VM.Config.ID }}/novnc" id="btn-novnc-standalone" target="_blank" class="btn btn-sm" title="Launch standalone full noVNC application in a new tab" style="border-radius: 0;">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                         <polyline points="15 3 21 3 21 9"></polyline>

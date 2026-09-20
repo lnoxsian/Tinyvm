@@ -7,7 +7,7 @@
         <!-- <p class="content-subtitle">All configured virtual machine instances</p> -->
     </div>
     <div class="header-actions">
-        <a href="/vms/new" class="btn btn-primary">
+        <a href="/vms/new" class="btn btn-primary" id="btn-create-vm" {{ if not .VMs }}style="display: none;"{{ end }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -18,4 +18,31 @@
 </div>
 
 {{ template "vm-grid" . }}
+
+<script>
+(function() {
+    function updateCreateVMButton() {
+        var btn = document.getElementById('btn-create-vm');
+        if (!btn) return;
+        var grid = document.getElementById('vm-grid');
+        if (grid) {
+            var hasEmpty = grid.querySelector('.empty-state') !== null;
+            var hasCards = grid.querySelector('.vm-card') !== null;
+            if (hasEmpty || !hasCards) {
+                btn.style.display = 'none';
+            } else {
+                btn.style.display = '';
+            }
+        }
+    }
+
+    document.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target && (evt.detail.target.id === 'vm-grid' || evt.detail.target.closest('#vm-grid'))) {
+            updateCreateVMButton();
+        }
+    });
+
+    document.body.addEventListener('vm-updated', updateCreateVMButton);
+})();
+</script>
 {{ end }}

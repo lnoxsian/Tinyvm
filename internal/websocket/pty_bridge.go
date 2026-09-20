@@ -37,15 +37,20 @@ func BridgePTY(ws *Conn, session *PTYSession, logger *slog.Logger) error {
 				}
 
 				// Intercept window resize commands formatted as JSON
-				if bytes.HasPrefix(payload, resizeCommandPrefix) {
-					var r struct {
-						Cols uint16 `json:"cols"`
-						Rows uint16 `json:"rows"`
+				trimmed := bytes.TrimSpace(payload)
+				if bytes.HasPrefix(trimmed, []byte(`{`)) && bytes.Contains(trimmed, []byte(`"resize"`)) {
+					dec := json.NewDecoder(bytes.NewReader(trimmed))
+					for dec.More() {
+						var r struct {
+							Type string `json:"type"`
+							Cols uint16 `json:"cols"`
+							Rows uint16 `json:"rows"`
+						}
+						if err := dec.Decode(&r); err == nil && r.Type == "resize" && r.Cols > 0 && r.Rows > 0 {
+							_ = session.Resize(r.Rows, r.Cols)
+						}
 					}
-					if err := json.Unmarshal(payload, &r); err == nil && r.Cols > 0 && r.Rows > 0 {
-						_ = session.Resize(r.Rows, r.Cols)
-						continue
-					}
+					continue
 				}
 
 				// Forward user input bytes to PTY

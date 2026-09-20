@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"bytes"
 	"log/slog"
 	"net"
 	"sync"
@@ -36,6 +37,10 @@ func Bridge(ws *Conn, unixSockPath string, opts BridgeOptions) error {
 				break
 			}
 			if (opcode == OpcodeText || opcode == OpcodeBinary) && len(payload) > 0 {
+				trimmed := bytes.TrimSpace(payload)
+				if bytes.HasPrefix(trimmed, []byte(`{`)) && bytes.Contains(trimmed, []byte(`"resize"`)) {
+					continue
+				}
 				if _, writeErr := sock.Write(payload); writeErr != nil {
 					break
 				}
