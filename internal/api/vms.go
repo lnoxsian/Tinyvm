@@ -1097,6 +1097,14 @@ func (s *Server) handleAPIVMUpdateConfig(w http.ResponseWriter, r *http.Request)
 	}
 
 	var update vm.VMConfig
+	curVM, _ := s.vmMgr.GetVM(id)
+	if curVM != nil {
+		update.Network.Enabled = curVM.Config.Network.Enabled
+		update.Autostart = curVM.Config.Autostart
+	} else {
+		update.Network.Enabled = true
+	}
+
 	contentType := r.Header.Get("Content-Type")
 	if strings.Contains(contentType, "application/json") {
 		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
@@ -1105,16 +1113,16 @@ func (s *Server) handleAPIVMUpdateConfig(w http.ResponseWriter, r *http.Request)
 		}
 	} else {
 		_ = r.ParseForm()
-		if name := r.FormValue("name"); name != "" {
+		if name := strings.TrimSpace(r.FormValue("name")); name != "" {
 			update.Name = name
 		}
 		if cpusStr := r.FormValue("cpus"); cpusStr != "" {
-			if c, err := strconv.Atoi(cpusStr); err == nil {
+			if c, err := strconv.Atoi(cpusStr); err == nil && c > 0 {
 				update.CPUs = c
 			}
 		}
 		if memStr := r.FormValue("memory_mb"); memStr != "" {
-			if m, err := strconv.Atoi(memStr); err == nil {
+			if m, err := strconv.Atoi(memStr); err == nil && m >= 128 {
 				update.MemoryMB = m
 			}
 		}
@@ -1127,13 +1135,25 @@ func (s *Server) handleAPIVMUpdateConfig(w http.ResponseWriter, r *http.Request)
 		if boot := r.FormValue("boot_order"); boot != "" {
 			update.BootOrder = boot
 		}
-		if autostartStr := r.FormValue("autostart"); autostartStr != "" {
+		if r.Form.Has("autostart_submitted") || r.Form.Has("autostart") {
+			autostartStr := r.FormValue("autostart")
 			update.Autostart = autostartStr == "true" || autostartStr == "1" || autostartStr == "on"
 		}
 		if sshStr := r.FormValue("ssh_port"); sshStr != "" {
 			if p, err := strconv.Atoi(sshStr); err == nil {
 				update.Network.SSHPort = p
 			}
+		}
+		if r.Form.Has("iso") && curVM != nil {
+			newISO := strings.TrimSpace(r.FormValue("iso"))
+			if (newISO == "" || newISO == "none") && curVM.Config.ISO != "" {
+				_ = s.vmMgr.EjectISO(id)
+			} else if newISO != "" && newISO != "none" && newISO != curVM.Config.ISO {
+				_ = s.vmMgr.AttachISO(id, newISO)
+			}
+		}
+		if diskResize := strings.TrimSpace(r.FormValue("disk_resize")); diskResize != "" {
+			_ = s.vmMgr.ResizeVMDisk(id, diskResize)
 		}
 	}
 
@@ -1149,7 +1169,7 @@ func (s *Server) handleAPIVMUpdateConfig(w http.ResponseWriter, r *http.Request)
 	s.logger.Info("Updated VM configuration", "id", id)
 
 	if !strings.Contains(contentType, "application/json") && r.Header.Get("HX-Request") == "" {
-		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		http.Redirect(w, r, "/vms/"+id+"#options", http.StatusSeeOther)
 		return
 	}
 
