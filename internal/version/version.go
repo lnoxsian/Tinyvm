@@ -4,7 +4,7 @@ import "runtime"
 
 var (
 	// Version is the semantic version of TinyVM.
-	Version = "0.1.0"
+	Version = "0.1.1"
 	// Commit is the git commit hash at build time.
 	Commit = "unknown"
 	// BuildDate is the RFC3339 build timestamp.

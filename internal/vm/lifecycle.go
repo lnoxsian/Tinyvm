@@ -239,8 +239,8 @@ func (m *Manager) ShutdownVMWithFallback(id string, timeout time.Duration, force
 		}
 	}
 
-	// 2. Wait up to 2 seconds synchronously so fast shutdowns update instantly
-	immediateWait := 2 * time.Second
+	// 2. Wait up to 3.5 seconds synchronously so normal shutdowns update instantly
+	immediateWait := 3500 * time.Millisecond
 	if timeout < immediateWait {
 		immediateWait = timeout
 	}

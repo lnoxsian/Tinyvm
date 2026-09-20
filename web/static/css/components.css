@@ -538,6 +538,21 @@
     border-color: rgba(227, 179, 65, 0.4);
 }
 
+.btn-action-shutdown:hover:not(:disabled) {
+    color: #e3b341;
+    border-color: rgba(227, 179, 65, 0.4);
+}
+
+.btn-action-reset:hover:not(:disabled) {
+    color: #f0883e;
+    border-color: rgba(240, 136, 62, 0.4);
+}
+
+.btn-action-pause:hover:not(:disabled) {
+    color: #a371f7;
+    border-color: rgba(163, 113, 247, 0.4);
+}
+
 .btn:disabled,
 button:disabled {
     opacity: 0.35;
@@ -1054,7 +1069,7 @@ select.form-control {
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    color: var(--text-main);
+    color: var(--text);
     font-size: 0.85rem;
     font-weight: 500;
     opacity: 0;
@@ -1071,18 +1086,239 @@ select.form-control {
     border-left: 4px solid #22c55e;
 }
 
-.toast-error {
+.toast-error,
+.toast-danger {
     border-left: 4px solid #ef4444;
 }
 
+.toast-warning {
+    border-left: 4px solid #d29922;
+}
+
 .toast-info {
-    border-left: 4px solid var(--accent);
+    border-left: 4px solid var(--accent-blue);
 }
 
 .toast-icon {
     flex-shrink: 0;
     width: 18px;
     height: 18px;
+}
+
+.toast-close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    padding: 0 0.25rem;
+    transition: color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toast-close:hover {
+    color: var(--text);
+}
+
+/* ==========================================================================
+   Integrated In-HTML Popup Message & Modal Dialog System
+   ========================================================================== */
+
+.tvm-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(13, 17, 23, 0.78);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease-out;
+}
+
+.tvm-modal-backdrop.tvm-modal-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.tvm-modal-card {
+    background-color: var(--panel);
+    border: 1px solid var(--border);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: scale(0.95) translateY(-8px);
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tvm-modal-backdrop.tvm-modal-visible .tvm-modal-card {
+    transform: scale(1) translateY(0);
+}
+
+.tvm-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.1rem;
+    background-color: var(--panel-subtle);
+    border-bottom: 1px solid var(--border);
+}
+
+.tvm-modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+}
+
+.tvm-modal-icon-badge {
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.tvm-modal-icon-badge svg {
+    width: 18px;
+    height: 18px;
+}
+
+.tvm-modal-icon-info {
+    color: var(--accent-blue);
+}
+
+.tvm-modal-icon-warning {
+    color: var(--warning);
+}
+
+.tvm-modal-icon-danger,
+.tvm-modal-icon-error {
+    color: var(--danger-hover);
+}
+
+.tvm-modal-icon-success {
+    color: #3fb950;
+}
+
+.tvm-modal-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tvm-modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 0.2rem 0.4rem;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tvm-modal-close:hover {
+    color: var(--text);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.tvm-modal-body {
+    padding: 1.25rem 1.1rem;
+    color: var(--text);
+    font-size: 0.88rem;
+    line-height: 1.5;
+    word-break: break-word;
+    white-space: pre-line;
+}
+
+.tvm-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    padding: 0.75rem 1.1rem;
+    background-color: var(--panel-subtle);
+    border-top: 1px solid var(--border);
+}
+
+.tvm-modal-btn-cancel {
+    background-color: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.4rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.tvm-modal-btn-cancel:hover {
+    background-color: var(--panel-hover);
+    border-color: var(--text-muted);
+}
+
+.tvm-modal-btn-confirm,
+.tvm-modal-btn-ok {
+    padding: 0.4rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.btn-danger-solid {
+    background-color: var(--danger) !important;
+    border: 1px solid var(--danger) !important;
+    color: #ffffff !important;
+    padding: 0.4rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-danger-solid:hover {
+    background-color: var(--danger-hover) !important;
+    border-color: var(--danger-hover) !important;
+}
+
+/* Modal variant accents */
+.tvm-modal-card.tvm-modal-danger .tvm-modal-header {
+    border-top: 3px solid var(--danger);
+}
+
+.tvm-modal-card.tvm-modal-warning .tvm-modal-header {
+    border-top: 3px solid var(--warning);
+}
+
+.tvm-modal-card.tvm-modal-info .tvm-modal-header {
+    border-top: 3px solid var(--accent-blue);
+}
+
+.tvm-modal-card.tvm-modal-success .tvm-modal-header {
+    border-top: 3px solid var(--accent);
 }
 
 /* Proxmox-Style Tabs & Hardware Table */

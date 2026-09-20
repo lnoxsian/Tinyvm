@@ -11,84 +11,84 @@
             <span>VMs</span>
         </a>
         <h1 class="content-title" style="margin: 0;">{{ .VM.Config.Name }}</h1>
-        <span class="badge {{ .VM.Runtime.State }}">
+        <span class="badge {{ .VM.Runtime.State }}" id="vm-state-badge" data-state="{{ .VM.Runtime.State }}">
             <span class="badge-dot"></span>
             <span>{{ .VM.Runtime.State }}</span>
         </span>
-        {{ if .VM.Config.OSType }}
-        <span class="badge badge-subtle">{{ .VM.Config.OSType }}</span>
-        {{ end }}
     </div>
 
     <!-- Power Toolbar (Proxmox-Style) -->
     <div class="pve-actions-bar">
         {{ if eq .VM.Runtime.State "running" }}
         {{ if .VM.Config.ISO }}
-        <button class="btn btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/eject-iso" hx-swap="none" onclick="setTimeout(() => location.reload(), 400)" title="Eject attached ISO">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="5 15 12 8 19 15"></polyline>
-                <line x1="5" y1="19" x2="19" y2="19"></line>
+        <button class="btn btn-sm btn-icon" hx-post="/vms/{{ .VM.Config.ID }}/eject-iso" hx-swap="none" hx-on::after-request="if(event.detail.successful) safeReload()" title="Eject attached ISO" aria-label="Eject ISO">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 2 14 22 14 12 2"></polygon>
+                <line x1="2" y1="20" x2="22" y2="20"></line>
             </svg>
-            <span>Eject ISO</span>
         </button>
         {{ end }}
-        <button class="btn btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/shutdown" hx-swap="none" onclick="setTimeout(() => location.reload(), 600)" title="Send ACPI power down signal">
-            Shutdown
+        <button class="btn btn-sm btn-icon btn-action-shutdown" hx-post="/vms/{{ .VM.Config.ID }}/shutdown" hx-swap="none" hx-on:click="this.disabled = true; TinyVM.toast('Sending ACPI shutdown signal...', 'info');" hx-on::after-request="if(event.detail.successful) safeReload(200)" title="Shutdown (ACPI)" aria-label="Shutdown">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                <line x1="12" y1="2" x2="12" y2="12"></line>
+            </svg>
         </button>
-        <button class="btn btn-sm btn-danger" hx-post="/vms/{{ .VM.Config.ID }}/stop" hx-swap="none" hx-confirm="Power off VM '{{ .VM.Config.Name }}' immediately?" onclick="setTimeout(() => location.reload(), 400)" title="Immediate clean power-off">
-            Stop
+        <button class="btn btn-sm btn-icon btn-action-stop" hx-post="/vms/{{ .VM.Config.ID }}/stop" hx-swap="none" hx-confirm="Power off VM '{{ .VM.Config.Name }}' immediately?" hx-on::after-request="if(event.detail.successful) safeReload(300)" title="Stop VM (Power Off)" aria-label="Stop">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="6" width="12" height="12" rx="0"></rect>
+            </svg>
         </button>
-        <button class="btn btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/restart" hx-swap="none" onclick="setTimeout(() => location.reload(), 800)" title="Reboot operating system">
-            Restart
+        <button class="btn btn-sm btn-icon btn-action-restart" hx-post="/vms/{{ .VM.Config.ID }}/restart" hx-swap="none" hx-on::after-request="if(event.detail.successful) safeReload(600)" title="Restart VM" aria-label="Restart">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
         </button>
-        <button class="btn btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/reset" hx-swap="none" hx-confirm="Hard reset VM '{{ .VM.Config.Name }}'?" onclick="setTimeout(() => location.reload(), 400)" title="Instant hardware reset">
-            Reset
+        <button class="btn btn-sm btn-icon btn-action-reset" hx-post="/vms/{{ .VM.Config.ID }}/reset" hx-swap="none" hx-confirm="Hard reset VM '{{ .VM.Config.Name }}'?" hx-on::after-request="if(event.detail.successful) safeReload(300)" title="Hard Reset" aria-label="Reset">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
         </button>
-        <button class="btn btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/pause" hx-swap="none" onclick="setTimeout(() => location.reload(), 400)" title="Suspend execution">
-            Pause
+        <button class="btn btn-sm btn-icon btn-action-pause" hx-post="/vms/{{ .VM.Config.ID }}/pause" hx-swap="none" hx-on::after-request="if(event.detail.successful) safeReload()" title="Pause VM" aria-label="Pause">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+            </svg>
         </button>
         {{ else if eq .VM.Runtime.State "stopping" }}
-        <span class="badge stopping" style="padding: 0.35rem 0.75rem;">
-            <span class="badge-dot"></span>
-            <span>Stopping...</span>
-        </span>
-        <button class="btn btn-sm btn-danger" hx-post="/vms/{{ .VM.Config.ID }}/stop" hx-swap="none" onclick="setTimeout(() => location.reload(), 400)" title="Force stop unresponsive VM immediately">
-            Force Stop Now
+        <button class="btn btn-sm btn-danger btn-icon" hx-post="/vms/{{ .VM.Config.ID }}/stop" hx-swap="none" hx-on::after-request="if(event.detail.successful) safeReload(300)" title="Force Stop Now" aria-label="Force Stop">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="6" width="12" height="12" rx="0"></rect>
+            </svg>
         </button>
         {{ else if eq .VM.Runtime.State "paused" }}
-        <button class="btn btn-primary btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/resume" hx-swap="none" onclick="setTimeout(() => location.reload(), 400)" title="Resume CPU execution">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="btn btn-sm btn-icon btn-action-start" hx-post="/vms/{{ .VM.Config.ID }}/resume" hx-swap="none" hx-on::after-request="if(event.detail.successful) safeReload()" title="Resume VM" aria-label="Resume">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
-            <span>Resume</span>
         </button>
-        <button class="btn btn-sm btn-danger" hx-post="/vms/{{ .VM.Config.ID }}/stop" hx-swap="none" hx-confirm="Power off VM '{{ .VM.Config.Name }}'?" onclick="setTimeout(() => location.reload(), 400)">
-            Stop
+        <button class="btn btn-sm btn-icon btn-action-stop" hx-post="/vms/{{ .VM.Config.ID }}/stop" hx-swap="none" hx-confirm="Power off VM '{{ .VM.Config.Name }}'?" hx-on::after-request="if(event.detail.successful) safeReload(300)" title="Stop VM" aria-label="Stop">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="6" width="12" height="12" rx="0"></rect>
+            </svg>
         </button>
-        <button class="btn btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/reset" hx-swap="none" hx-confirm="Hard reset VM '{{ .VM.Config.Name }}'?" onclick="setTimeout(() => location.reload(), 400)">
-            Reset
+        <button class="btn btn-sm btn-icon btn-action-reset" hx-post="/vms/{{ .VM.Config.ID }}/reset" hx-swap="none" hx-confirm="Hard reset VM '{{ .VM.Config.Name }}'?" hx-on::after-request="if(event.detail.successful) safeReload(300)" title="Hard Reset" aria-label="Reset">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
         </button>
         {{ else }}
-        {{ if .VM.Config.ISO }}
-        <button class="btn btn-primary btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/boot" hx-swap="none" onclick="setTimeout(() => location.reload(), 800)" title="Eject ISO and boot machine directly from hard disk">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="btn btn-sm btn-icon btn-action-start" hx-post="/vms/{{ .VM.Config.ID }}/start" hx-swap="none" hx-on::after-request="if(event.detail.successful) safeReload(500)" title="Start VM" aria-label="Start">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
-            <span>Boot from Disk</span>
         </button>
-        <button class="btn btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/start" hx-swap="none" onclick="setTimeout(() => location.reload(), 800)" title="Boot from installer ISO">
-            Start (with ISO)
-        </button>
-        {{ else }}
-        <button class="btn btn-primary btn-sm" hx-post="/vms/{{ .VM.Config.ID }}/start" hx-swap="none" onclick="setTimeout(() => location.reload(), 800)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        <button class="btn btn-sm btn-danger btn-icon" hx-delete="/vms/{{ .VM.Config.ID }}" hx-confirm="Permanently delete VM '{{ .VM.Config.Name }}'? This will erase all disk files!" hx-on::after-request="if(event.detail.successful) safeNavigate('/vms')" title="Delete VM" aria-label="Delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
-            <span>Start VM</span>
-        </button>
-        {{ end }}
-        <button class="btn btn-sm btn-danger" hx-delete="/vms/{{ .VM.Config.ID }}" hx-confirm="Permanently delete VM '{{ .VM.Config.Name }}'? This will erase all disk files!" onclick="setTimeout(() => window.location.href='/vms', 400)">
-            Delete
         </button>
         {{ end }}
     </div>
@@ -215,37 +215,17 @@
 <!-- ================= TAB 2: CONSOLE ================= -->
 <div class="pve-tab-content" id="tab-console">
     {{ if ne .VM.Runtime.State "running" }}
-    <div class="card" style="padding: 2.5rem; text-align: center; background-color: var(--panel); border-radius: 0;">
-        <div style="margin-bottom: 1rem; color: var(--text-muted); display: flex; justify-content: center;">
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 14rem); min-height: 460px; text-align: center; padding: 2rem 1rem;">
+        <div style="margin-bottom: 1.25rem; color: var(--text-muted); display: flex; justify-content: center;">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
                 <line x1="12" y1="2" x2="12" y2="12"></line>
             </svg>
         </div>
-        <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">Virtual Machine is Stopped</h2>
-        <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 1.5rem auto; font-size: 0.9rem;">
+        <h2 style="font-size: 1.35rem; font-weight: 600; margin-bottom: 0.65rem; color: var(--text);">Virtual Machine is Stopped</h2>
+        <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto; font-size: 0.92rem; line-height: 1.6;">
             The interactive graphical display and serial console are only available when the VM is powered on and running.
         </p>
-        {{ if .VM.Config.ISO }}
-        <div style="display: flex; gap: 0.75rem; justify-content: center;">
-            <button class="btn btn-primary" hx-post="/vms/{{ .VM.Config.ID }}/boot" hx-swap="none" onclick="setTimeout(() => window.location.reload(), 1000)" title="Eject ISO and boot installed OS from hard disk" style="border-radius: 0;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                </svg>
-                <span>Boot from Disk (Remove ISO)</span>
-            </button>
-            <button class="btn" hx-post="/vms/{{ .VM.Config.ID }}/start" hx-swap="none" onclick="setTimeout(() => window.location.reload(), 1000)" style="border-radius: 0;">
-                <span>Start with ISO</span>
-            </button>
-        </div>
-        {{ else }}
-        <button class="btn btn-primary" hx-post="/vms/{{ .VM.Config.ID }}/start" hx-swap="none" onclick="setTimeout(() => window.location.reload(), 1000)" style="border-radius: 0;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-            </svg>
-            <span>Start Virtual Machine</span>
-        </button>
-        {{ end }}
     </div>
     {{ else }}
     <div class="console-wrapper" id="console-wrapper" data-vm-id="{{ .VM.Config.ID }}" data-running="true" style="height: calc(100vh - 13.5rem); min-height: 560px; border-radius: 0;">
@@ -489,12 +469,31 @@
                         <td style="color: var(--text-muted);">{{ .Date.Format "2006-01-02 15:04:05" }}</td>
                         <td>{{ if gt .VMStateSize 0 }}{{ printf "%.1f MB" (div (float64 .VMStateSize) 1048576.0) }}{{ else }}Disk Only{{ end }}</td>
                         <td style="text-align: right;">
-                            <form style="display: inline;" action="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/rollback" method="POST" onsubmit="return confirm('Rollback VM disk to snapshot \'{{ .Name }}\'? Any unsaved changes will be lost.');">
-                                <button type="submit" class="btn btn-sm btn-outline" style="border-radius: 0;" title="Revert disk state to this snapshot">Rollback</button>
-                            </form>
-                            <form style="display: inline; margin-left: 0.4rem;" action="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/delete" method="POST" onsubmit="return confirm('Permanently delete snapshot \'{{ .Name }}\'?');">
-                                <button type="submit" class="btn btn-sm btn-danger" style="border-radius: 0;" title="Delete snapshot">Delete</button>
-                            </form>
+                            <button class="btn btn-sm btn-icon"
+                                    hx-post="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/rollback"
+                                    hx-confirm="Rollback VM disk to snapshot '{{ .Name }}'? Any unsaved changes will be lost."
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) safeReload(300)"
+                                    title="Rollback to snapshot '{{ .Name }}'"
+                                    aria-label="Rollback">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="1 4 1 10 7 10"></polyline>
+                                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                                </svg>
+                            </button>
+                            <button class="btn btn-sm btn-danger btn-icon"
+                                    hx-post="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/delete"
+                                    hx-confirm="Permanently delete snapshot '{{ .Name }}'?"
+                                    hx-swap="none"
+                                    hx-on::after-request="if(event.detail.successful) safeReload(300)"
+                                    style="margin-left: 0.35rem;"
+                                    title="Delete snapshot '{{ .Name }}'"
+                                    aria-label="Delete">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
                         </td>
                     </tr>
                     {{ end }}

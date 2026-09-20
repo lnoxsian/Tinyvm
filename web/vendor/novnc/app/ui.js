@@ -1215,21 +1215,12 @@ const UI = {
     },
 
     handleBeforeUnload(e) {
-        // Trigger a "Leave site?" warning prompt before closing the
-        // page. Modern browsers (Oct 2025) accept either (or both)
-        // preventDefault() or a nonempty returnValue, though the latter is
-        // considered legacy. The custom string is ignored by modern browsers,
-        // which display a native message, but older browsers will show it.
-        e.preventDefault();
-        e.returnValue = _("Are you sure you want to disconnect the session?");
+        // Disabled in TinyVM: allow seamless reload and navigation without browser prompt
     },
 
     updateBeforeUnload() {
-        // Remove first to avoid adding duplicates
+        // Disabled in TinyVM: ensure beforeunload listener is never active
         window.removeEventListener("beforeunload", UI.handleBeforeUnload);
-        if (!UI.rfb?.viewOnly && UI.connected) {
-            window.addEventListener("beforeunload", UI.handleBeforeUnload);
-        }
     },
 
 /* ------^-------

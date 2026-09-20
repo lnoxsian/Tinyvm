@@ -1,10 +1,402 @@
 // TinyVM client-side script
+
+/* ==========================================================================
+   TinyVM Integrated In-HTML Popup Message & Modal Dialog System
+   ========================================================================== */
+
+const TinyVM = window.TinyVM || {};
+window.TinyVM = TinyVM;
+
+// SVG icons for modal dialogs and toasts
+const POPUP_ICONS = {
+    info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`,
+    warning: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+    danger: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
+    error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`,
+    success: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
+    question: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`
+};
+
+/**
+ * Show an integrated in-HTML modal popup dialog
+ * @param {Object} opts Configuration options
+ * @returns {Promise<boolean>}
+ */
+function createPopupModal(opts) {
+    return new Promise((resolve) => {
+        // Remove any existing modal if open
+        const existing = document.getElementById("tvm-modal-backdrop");
+        if (existing) {
+            existing.remove();
+        }
+
+        const type = opts.type || "info";
+        const isConfirm = !!opts.isConfirm;
+        const title = opts.title || (type === "danger" || type === "error" ? "Error" : type === "warning" ? "Warning" : isConfirm ? "Confirmation Required" : "Notice");
+        const message = opts.message || "";
+        const confirmText = opts.confirmText || (isConfirm ? "Confirm" : "OK");
+        const cancelText = opts.cancelText || "Cancel";
+        const confirmClass = opts.confirmClass || (type === "danger" || type === "error" ? "btn-danger-solid" : "btn-primary");
+        const iconSvg = POPUP_ICONS[type] || POPUP_ICONS.info;
+
+        const backdrop = document.createElement("div");
+        backdrop.id = "tvm-modal-backdrop";
+        backdrop.className = "tvm-modal-backdrop";
+        backdrop.setAttribute("tabindex", "-1");
+
+        const card = document.createElement("div");
+        card.className = `tvm-modal-card tvm-modal-${type}`;
+        card.setAttribute("role", "dialog");
+        card.setAttribute("aria-modal", "true");
+        card.setAttribute("aria-labelledby", "tvm-modal-title");
+
+        // Header
+        const header = document.createElement("div");
+        header.className = "tvm-modal-header";
+
+        const headerLeft = document.createElement("div");
+        headerLeft.className = "tvm-modal-header-left";
+
+        const iconBadge = document.createElement("div");
+        iconBadge.className = `tvm-modal-icon-badge tvm-modal-icon-${type}`;
+        iconBadge.innerHTML = iconSvg;
+
+        const titleEl = document.createElement("h3");
+        titleEl.id = "tvm-modal-title";
+        titleEl.className = "tvm-modal-title";
+        titleEl.textContent = title;
+
+        headerLeft.appendChild(iconBadge);
+        headerLeft.appendChild(titleEl);
+
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "tvm-modal-close";
+        closeBtn.setAttribute("aria-label", "Close dialog");
+        closeBtn.innerHTML = "&times;";
+
+        header.appendChild(headerLeft);
+        header.appendChild(closeBtn);
+
+        // Body
+        const body = document.createElement("div");
+        body.className = "tvm-modal-body";
+        const msgEl = document.createElement("div");
+        msgEl.className = "tvm-modal-message";
+        msgEl.textContent = message;
+        body.appendChild(msgEl);
+
+        // Footer
+        const footer = document.createElement("div");
+        footer.className = "tvm-modal-footer";
+
+        let cancelBtn = null;
+        if (isConfirm) {
+            cancelBtn = document.createElement("button");
+            cancelBtn.type = "button";
+            cancelBtn.className = "btn tvm-modal-btn-cancel";
+            cancelBtn.textContent = cancelText;
+            footer.appendChild(cancelBtn);
+        }
+
+        const confirmBtn = document.createElement("button");
+        confirmBtn.type = "button";
+        confirmBtn.className = `btn ${confirmClass} tvm-modal-btn-confirm`;
+        confirmBtn.textContent = confirmText;
+        footer.appendChild(confirmBtn);
+
+        card.appendChild(header);
+        card.appendChild(body);
+        card.appendChild(footer);
+        backdrop.appendChild(card);
+
+        const container = document.getElementById("tvm-modal-root") || document.body;
+        container.appendChild(backdrop);
+
+        // Trigger entrance animation
+        requestAnimationFrame(() => {
+            backdrop.classList.add("tvm-modal-visible");
+        });
+
+        // Focus management: If destructive confirm, focus Cancel to avoid accidental Enter key; else focus confirm
+        if (isConfirm && (type === "danger" || confirmClass.includes("danger")) && cancelBtn) {
+            cancelBtn.focus();
+        } else {
+            confirmBtn.focus();
+        }
+
+        let isClosed = false;
+        function closeModal(result) {
+            if (isClosed) return;
+            isClosed = true;
+
+            window.removeEventListener("keydown", handleKeydown);
+            backdrop.classList.remove("tvm-modal-visible");
+            setTimeout(() => {
+                backdrop.remove();
+            }, 180);
+            resolve(result);
+        }
+
+        function handleKeydown(e) {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                closeModal(false);
+            } else if (e.key === "Enter") {
+                if (document.activeElement === cancelBtn) {
+                    e.preventDefault();
+                    closeModal(false);
+                } else if (!e.shiftKey && !e.altKey && !e.ctrlKey) {
+                    e.preventDefault();
+                    closeModal(true);
+                }
+            }
+        }
+
+        window.addEventListener("keydown", handleKeydown);
+
+        closeBtn.addEventListener("click", () => closeModal(false));
+        if (cancelBtn) {
+            cancelBtn.addEventListener("click", () => closeModal(false));
+        }
+        confirmBtn.addEventListener("click", () => closeModal(true));
+
+        backdrop.addEventListener("click", (e) => {
+            if (e.target === backdrop) {
+                closeModal(false);
+            }
+        });
+    });
+}
+
+/**
+ * Integrated in-HTML Alert popup message
+ * Replaces window.alert
+ */
+TinyVM.alert = function(message, options = {}) {
+    if (typeof options === "string") {
+        options = { title: options };
+    }
+    const isError = /error|failed|failure|unable|cannot|invalid/i.test(message);
+    const type = options.type || (isError ? "error" : "info");
+    const title = options.title || (type === "error" ? "Error" : type === "warning" ? "Warning" : "Notice");
+
+    return createPopupModal({
+        message: String(message),
+        title: title,
+        type: type,
+        isConfirm: false,
+        confirmText: options.okText || "OK",
+        confirmClass: options.confirmClass || "btn-primary"
+    });
+};
+
+/**
+ * Integrated in-HTML Confirmation popup message
+ * Replaces window.confirm & powers HTMX hx-confirm
+ */
+TinyVM.confirm = function(message, options = {}) {
+    if (typeof options === "string") {
+        options = { title: options };
+    }
+
+    const isDestructive = /delete|erase|destroy|remove|stop|reset|rollback|force|power off/i.test(message);
+    const type = options.type || (isDestructive ? "danger" : "warning");
+    const title = options.title || (isDestructive ? "Confirm Action" : "Confirmation Required");
+    const confirmText = options.confirmText || (isDestructive && /delete|erase|remove/i.test(message) ? "Delete" : "Confirm");
+    const confirmClass = options.confirmClass || (isDestructive ? "btn-danger-solid" : "btn-primary");
+
+    return createPopupModal({
+        message: String(message),
+        title: title,
+        type: type,
+        isConfirm: true,
+        confirmText: confirmText,
+        cancelText: options.cancelText || "Cancel",
+        confirmClass: confirmClass
+    });
+};
+
+// Floating toast notification system
+function showToast(message, type = "success", duration = 3500) {
+    let container = document.getElementById("toast-container");
+    if (!container) {
+        container = document.createElement("div");
+        container.id = "toast-container";
+        container.className = "toast-container";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+
+    let iconSvg = "";
+    if (type === "success") {
+        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+    } else if (type === "error" || type === "danger") {
+        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+    } else if (type === "warning") {
+        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#d29922" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+    } else {
+        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+    }
+
+    const textSpan = document.createElement("span");
+    textSpan.textContent = message;
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "toast-close";
+    closeBtn.setAttribute("aria-label", "Dismiss notification");
+    closeBtn.innerHTML = "&times;";
+
+    toast.innerHTML = iconSvg;
+    toast.appendChild(textSpan);
+    toast.appendChild(closeBtn);
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => toast.classList.add("show"));
+
+    let dismissTimer;
+    function dismiss() {
+        clearTimeout(dismissTimer);
+        toast.classList.remove("show");
+        setTimeout(() => toast.remove(), 250);
+    }
+
+    closeBtn.addEventListener("click", dismiss);
+    if (duration > 0) {
+        dismissTimer = setTimeout(dismiss, duration);
+    }
+}
+
+TinyVM.toast = showToast;
+
+// Global helper exports
+window.showAlert = TinyVM.alert;
+window.showConfirm = TinyVM.confirm;
+window.showToast = showToast;
+
+// Override native browser alert with integrated in-HTML popup message!
+window.alert = function(msg) {
+    return TinyVM.alert(msg);
+};
+
+/* ==========================================================================
+   Navigation & Reload Helpers
+   ========================================================================== */
+
+function safeReload(delay = 0) {
+    if (delay > 0) {
+        setTimeout(() => {
+            window.location.reload();
+        }, delay);
+    } else {
+        window.location.reload();
+    }
+}
+
+function safeNavigate(url, delay = 0) {
+    if (delay > 0) {
+        setTimeout(() => {
+            window.location.href = url;
+        }, delay);
+    } else {
+        window.location.href = url;
+    }
+}
+
+window.safeReload = safeReload;
+window.safeNavigate = safeNavigate;
+
+// Neutralize any beforeunload prompts to ensure smooth navigation & reload
+window.addEventListener("beforeunload", (e) => {
+    delete e.returnValue;
+}, { capture: true });
+window.onbeforeunload = null;
+
+// Auto-refresh when VM is in an intermediate transitional state ("stopping" or "starting")
+function initVMTransitionWatcher() {
+    const badge = document.getElementById("vm-state-badge");
+    if (!badge) return;
+
+    const currentState = (badge.getAttribute("data-state") || "").toLowerCase().trim();
+    // Strictly only monitor transitional states. NEVER poll when steady ("running" or "stopped").
+    if (currentState !== "stopping" && currentState !== "starting") {
+        return;
+    }
+
+    const vmIdMatch = window.location.pathname.match(/\/vms\/([^/]+)/);
+    if (!vmIdMatch) return;
+    const vmId = vmIdMatch[1];
+    if (vmId === "new") return;
+
+    let reloaded = false;
+    const interval = setInterval(async () => {
+        if (reloaded) return;
+        try {
+            const res = await fetch(`/api/v1/vms/${encodeURIComponent(vmId)}`, {
+                headers: { "Accept": "application/json" }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            // TinyVM API returns status in data.status
+            const newStatus = (data.status || "").toLowerCase().trim();
+
+            // When the state transitions away from the intermediate state (e.g. stopping -> stopped)
+            if (newStatus && newStatus !== currentState) {
+                reloaded = true;
+                clearInterval(interval);
+                safeReload(150);
+            }
+        } catch (e) {
+            // Ignore transient network errors during process teardown
+        }
+    }, 1000);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+    // Watch for state transitions if VM is stopping or starting
+    initVMTransitionWatcher();
+
     // Theme toggle helper if configured
     const savedTheme = localStorage.getItem("tinyvm-theme");
     if (savedTheme) {
         document.documentElement.setAttribute("data-theme", savedTheme);
     }
+
+    // Global HTMX confirm interception: replace native browser confirm with integrated HTML popup
+    document.body.addEventListener("htmx:confirm", (evt) => {
+        const question = evt.detail.question || (evt.target && evt.target.getAttribute("hx-confirm"));
+        if (!question) return;
+
+        // Suppress native browser confirm dialog
+        evt.preventDefault();
+
+        TinyVM.confirm(question).then((confirmed) => {
+            if (confirmed) {
+                // Re-issue HTMX request with prompt skipped
+                evt.detail.issueRequest(true);
+            }
+        });
+    });
+
+    // Global form data-confirm interception
+    document.body.addEventListener("submit", (evt) => {
+        const form = evt.target;
+        if (!form || !form.getAttribute) return;
+        const confirmMsg = form.getAttribute("data-confirm");
+        if (confirmMsg && !form.dataset.tvmConfirmed) {
+            evt.preventDefault();
+            TinyVM.confirm(confirmMsg).then((confirmed) => {
+                if (confirmed) {
+                    form.dataset.tvmConfirmed = "true";
+                    form.submit();
+                    delete form.dataset.tvmConfirmed;
+                }
+            });
+        }
+    });
 
     // HTMX response error handler
     document.body.addEventListener("htmx:responseError", (evt) => {
@@ -117,39 +509,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 2000);
 });
 
-// Floating toast notification system
-function showToast(message, type = "success") {
-    let container = document.getElementById("toast-container");
-    if (!container) {
-        container = document.createElement("div");
-        container.id = "toast-container";
-        container.className = "toast-container";
-        document.body.appendChild(container);
-    }
-
-    const toast = document.createElement("div");
-    toast.className = `toast toast-${type}`;
-
-    let iconSvg = "";
-    if (type === "success") {
-        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
-    } else if (type === "error") {
-        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
-    } else {
-        iconSvg = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
-    }
-
-    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
-    container.appendChild(toast);
-
-    requestAnimationFrame(() => toast.classList.add("show"));
-
-    setTimeout(() => {
-        toast.classList.remove("show");
-        setTimeout(() => toast.remove(), 250);
-    }, 3500);
-}
-
 /* ==========================================================================
    VM Creation Wizard Handlers (Phase 8)
    ========================================================================== */
@@ -247,7 +606,7 @@ function showWizardError(msg) {
         wizardErr.style.display = "flex";
         wizardErr.scrollIntoView({ behavior: "smooth", block: "center" });
     } else {
-        alert(msg);
+        TinyVM.alert(msg, { type: "error", title: "Configuration Error" });
     }
 }
 
