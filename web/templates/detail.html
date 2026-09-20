@@ -349,17 +349,6 @@
                         </td>
                     </tr>
 
-                    <!-- Autostart -->
-                    <tr>
-                        <td class="property-name">Autostart</td>
-                        <td style="text-align: right;">
-                            <label style="display: inline-flex; align-items: center; gap: 0.45rem; cursor: pointer; font-size: 0.85rem;">
-                                <input type="checkbox" name="autostart" value="true" {{ if .VM.Config.Autostart }}checked{{ end }}>
-                                <span>Start automatically on host boot</span>
-                            </label>
-                        </td>
-                    </tr>
-
                     <!-- CD/DVD Drive -->
                     <tr>
                         <td class="property-name">CD/DVD Drive</td>
@@ -373,7 +362,18 @@
                         </td>
                     </tr>
 
-                    <!-- Processors -->
+                    <!-- BIOS/Firmware -->
+                    <tr>
+                        <td class="property-name">BIOS/Firmware</td>
+                        <td style="text-align: right;">
+                            <select name="firmware" class="form-control" style="width: 260px; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to change firmware"{{ end }}>
+                                <option value="bios" {{ if eq .VM.Config.Firmware "bios" }}selected{{ end }}>SeaBIOS (Standard BIOS)</option>
+                                <option value="uefi" {{ if eq .VM.Config.Firmware "uefi" }}selected{{ end }}>OVMF (UEFI)</option>
+                            </select>
+                        </td>
+                    </tr>
+
+                    <!-- Processors (vCPU) -->
                     <tr>
                         <td class="property-name">Processors (vCPU)</td>
                         <td style="text-align: right;">
@@ -384,7 +384,7 @@
                         </td>
                     </tr>
 
-                    <!-- Memory -->
+                    <!-- Memory (RAM) -->
                     <tr>
                         <td class="property-name">Memory (RAM)</td>
                         <td style="text-align: right;">
@@ -395,18 +395,7 @@
                         </td>
                     </tr>
 
-                    <!-- Hard Disk -->
-                    <tr>
-                        <td class="property-name">Hard Disk (virtio0)</td>
-                        <td style="text-align: right;">
-                            <div style="display: inline-flex; align-items: center; gap: 0.5rem;">
-                                <span style="font-size: 0.85rem; color: var(--text-muted);">Expand size:</span>
-                                <input type="text" name="disk_resize" placeholder="+5G" style="width: 110px; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" title="Enter expansion delta (e.g. +5G)" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to resize disk"{{ end }}>
-                            </div>
-                        </td>
-                    </tr>
-
-                    <!-- Network -->
+                    <!-- Network (net0) -->
                     <tr>
                         <td class="property-name">Network (net0)</td>
                         <td style="text-align: right;">
@@ -417,14 +406,29 @@
                         </td>
                     </tr>
 
-                    <!-- BIOS / Firmware -->
+                    <!-- Hard Disk (virtio0) -->
                     <tr>
-                        <td class="property-name">BIOS / Firmware</td>
+                        <td class="property-name">Hard Disk (virtio0)</td>
                         <td style="text-align: right;">
-                            <select name="firmware" class="form-control" style="width: 260px; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to change firmware"{{ end }}>
-                                <option value="bios" {{ if eq .VM.Config.Firmware "bios" }}selected{{ end }}>SeaBIOS (Standard BIOS)</option>
-                                <option value="uefi" {{ if eq .VM.Config.Firmware "uefi" }}selected{{ end }}>OVMF (UEFI)</option>
-                            </select>
+                            <div style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.85rem; color: var(--text-muted);">Expand size:</span>
+                                <input type="text" name="disk_resize" placeholder="+5G" style="width: 110px; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" title="Enter expansion delta (e.g. +5G)" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to resize disk"{{ end }}>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Autostart -->
+                    <tr>
+                        <td class="property-name">Autostart</td>
+                        <td style="text-align: right;">
+                            <div style="display: inline-flex; align-items: center; gap: 0.75rem;">
+                                <span style="font-size: 0.82rem; color: var(--text-muted);">Start on host boot:</span>
+                                <div class="btn-toggle-group" id="autostart-toggle-group">
+                                    <button type="button" class="btn-toggle-item btn-toggle-on {{ if .VM.Config.Autostart }}active{{ end }}" onclick="setAutostart(true)" title="Enable autostart on host boot">ON</button>
+                                    <button type="button" class="btn-toggle-item btn-toggle-off {{ if not .VM.Config.Autostart }}active{{ end }}" onclick="setAutostart(false)" title="Disable autostart on host boot">OFF</button>
+                                </div>
+                                <input type="hidden" name="autostart" id="autostart-input" value="{{ if .VM.Config.Autostart }}true{{ else }}false{{ end }}">
+                            </div>
                         </td>
                     </tr>
                 </tbody>
@@ -541,6 +545,24 @@
 
 <!-- Tab Switching Script -->
 <script>
+window.setAutostart = function(enabled) {
+    const input = document.getElementById('autostart-input');
+    const group = document.getElementById('autostart-toggle-group');
+    if (!input || !group) return;
+    input.value = enabled ? 'true' : 'false';
+    const onBtn = group.querySelector('.btn-toggle-on');
+    const offBtn = group.querySelector('.btn-toggle-off');
+    if (onBtn && offBtn) {
+        if (enabled) {
+            onBtn.classList.add('active');
+            offBtn.classList.remove('active');
+        } else {
+            onBtn.classList.remove('active');
+            offBtn.classList.add('active');
+        }
+    }
+};
+
 (function() {
     const tabs = document.querySelectorAll('.pve-tab');
     const contents = document.querySelectorAll('.pve-tab-content');

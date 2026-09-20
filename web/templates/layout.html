@@ -15,22 +15,22 @@
 <body>
     <div class="app-container">
         <header class="app-header">
-            <a href="/" class="brand">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect width="20" height="8" x="2" y="2"/>
-                    <rect width="20" height="8" x="2" y="14"/>
-                    <line x1="6" x2="6.01" y1="6" y2="6"/>
-                    <line x1="6" x2="6.01" y1="18" y2="18"/>
-                </svg>
-                <span>TinyVM</span>
-                <span class="brand-badge">{{ .Version }}</span>
-            </a>
-        </header>
+            <div class="header-left">
+                <a href="/" class="brand">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="20" height="8" x="2" y="2"/>
+                        <rect width="20" height="8" x="2" y="14"/>
+                        <line x1="6" x2="6.01" y1="6" y2="6"/>
+                        <line x1="6" x2="6.01" y1="18" y2="18"/>
+                    </svg>
+                    <span>TinyVM</span>
+                    <span class="brand-badge">{{ .Version }}</span>
+                </a>
 
-        <div class="app-body">
-            <aside class="sidebar">
-                <nav class="nav-group">
-                    <a href="/" class="nav-item {{ if eq .ActiveNav "dashboard" }}active{{ end }}">
+                <div class="header-divider"></div>
+
+                <nav class="header-nav">
+                    <a href="/" class="nav-item {{ if eq .ActiveNav "dashboard" }}active{{ end }}" title="Overview" aria-label="Overview">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                             <rect width="7" height="9" x="3" y="3" rx="1"/>
                             <rect width="7" height="5" x="14" y="3" rx="1"/>
@@ -39,7 +39,7 @@
                         </svg>
                         <span>Overview</span>
                     </a>
-                    <a href="/vms" class="nav-item {{ if eq .ActiveNav "vms" }}active{{ end }}">
+                    <a href="/vms" class="nav-item {{ if eq .ActiveNav "vms" }}active{{ end }}" title="Virtual Machines" aria-label="Virtual Machines">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="2" y="3" width="20" height="14" rx="2"/>
                             <line x1="8" x2="16" y1="21" y2="21"/>
@@ -47,7 +47,7 @@
                         </svg>
                         <span>Virtual Machines</span>
                     </a>
-                    <a href="/storage" class="nav-item {{ if eq .ActiveNav "storage" }}active{{ end }}">
+                    <a href="/storage" class="nav-item {{ if eq .ActiveNav "storage" }}active{{ end }}" title="Storage" aria-label="Storage">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                             <ellipse cx="12" cy="5" rx="9" ry="3"/>
                             <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
@@ -55,7 +55,7 @@
                         </svg>
                         <span>Storage</span>
                     </a>
-                    <a href="/settings" class="nav-item {{ if eq .ActiveNav "settings" }}active{{ end }}">
+                    <a href="/settings" class="nav-item {{ if eq .ActiveNav "settings" }}active{{ end }}" title="Settings" aria-label="Settings">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="12" cy="12" r="3"/>
                             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -63,8 +63,10 @@
                         <span>Settings</span>
                     </a>
                 </nav>
-            </aside>
+            </div>
+        </header>
 
+        <div class="app-body">
             <main class="main-content">
                 {{ block "content" . }}{{ end }}
             </main>

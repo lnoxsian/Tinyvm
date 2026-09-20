@@ -13,20 +13,22 @@
         </div>
     </div>
 
-    <div class="vm-td vm-col-pid vm-cell-mono">
-        {{ if .IsRunning }}<span class="vm-field-label">PID:</span>{{ .PID }}{{ else }}<span class="text-muted">—</span>{{ end }}
-    </div>
+    <div class="vm-stats-group">
+        <div class="vm-td vm-col-pid vm-cell-mono">
+            {{ if .IsRunning }}<span class="vm-field-label">PID:</span>{{ .PID }}{{ else }}<span class="text-muted">—</span>{{ end }}
+        </div>
 
-    <div class="vm-td vm-col-cpu vm-cell-mono">
-        {{ if .IsRunning }}<span class="vm-field-label">CPU:</span>{{ printf "%.1f" .CPUPercent }}%{{ else }}<span class="text-muted">—</span>{{ end }}
-    </div>
+        <div class="vm-td vm-col-cpu vm-cell-mono">
+            {{ if .IsRunning }}<span class="vm-field-label">CPU:</span>{{ printf "%.1f" .CPUPercent }}%{{ else }}<span class="text-muted">—</span>{{ end }}
+        </div>
 
-    <div class="vm-td vm-col-ram vm-cell-mono">
-        {{ if and .IsRunning .MemUsedMB }}<span class="vm-field-label">RAM:</span>{{ .MemUsedMB }} MB{{ else if .IsRunning }}<span class="vm-field-label">RAM:</span>0 MB{{ else }}<span class="text-muted">—</span>{{ end }}
-    </div>
+        <div class="vm-td vm-col-ram vm-cell-mono">
+            {{ if and .IsRunning .MemUsedMB }}<span class="vm-field-label">RAM:</span>{{ .MemUsedMB }} MB{{ else if .IsRunning }}<span class="vm-field-label">RAM:</span>0 MB{{ else }}<span class="text-muted">—</span>{{ end }}
+        </div>
 
-    <div class="vm-td vm-col-uptime vm-cell-mono">
-        {{ if and .IsRunning .Uptime }}<span class="vm-field-label">Uptime:</span>{{ .Uptime }}{{ else if .IsRunning }}<span class="vm-field-label">Uptime:</span>0s{{ else }}<span class="text-muted">—</span>{{ end }}
+        <div class="vm-td vm-col-uptime vm-cell-mono">
+            {{ if and .IsRunning .Uptime }}<span class="vm-field-label">Uptime:</span>{{ .Uptime }}{{ else if .IsRunning }}<span class="vm-field-label">Uptime:</span>0s{{ else }}<span class="text-muted">—</span>{{ end }}
+        </div>
     </div>
 
     <div class="vm-td vm-col-actions">

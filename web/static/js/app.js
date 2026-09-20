@@ -309,6 +309,25 @@ function safeNavigate(url, delay = 0) {
 window.safeReload = safeReload;
 window.safeNavigate = safeNavigate;
 
+function setAutostart(enabled) {
+    const input = document.getElementById('autostart-input');
+    const group = document.getElementById('autostart-toggle-group');
+    if (!input || !group) return;
+    input.value = enabled ? 'true' : 'false';
+    const onBtn = group.querySelector('.btn-toggle-on');
+    const offBtn = group.querySelector('.btn-toggle-off');
+    if (onBtn && offBtn) {
+        if (enabled) {
+            onBtn.classList.add('active');
+            offBtn.classList.remove('active');
+        } else {
+            onBtn.classList.remove('active');
+            offBtn.classList.add('active');
+        }
+    }
+}
+window.setAutostart = setAutostart;
+
 // Neutralize any beforeunload prompts to ensure smooth navigation & reload
 window.addEventListener("beforeunload", (e) => {
     delete e.returnValue;
