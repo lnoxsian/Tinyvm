@@ -151,8 +151,8 @@ func (c *Conn) ReadMessage() (int, []byte, error) {
 	var messageOpcode int
 
 	for {
-		header := make([]byte, 2)
-		if _, err := io.ReadFull(c.br, header); err != nil {
+		var header [2]byte
+		if _, err := io.ReadFull(c.br, header[:]); err != nil {
 			return 0, nil, err
 		}
 
@@ -164,17 +164,17 @@ func (c *Conn) ReadMessage() (int, []byte, error) {
 		var payloadLen uint64
 		switch lenField {
 		case 126:
-			lenBuf := make([]byte, 2)
-			if _, err := io.ReadFull(c.br, lenBuf); err != nil {
+			var lenBuf [2]byte
+			if _, err := io.ReadFull(c.br, lenBuf[:]); err != nil {
 				return 0, nil, err
 			}
-			payloadLen = uint64(binary.BigEndian.Uint16(lenBuf))
+			payloadLen = uint64(binary.BigEndian.Uint16(lenBuf[:]))
 		case 127:
-			lenBuf := make([]byte, 8)
-			if _, err := io.ReadFull(c.br, lenBuf); err != nil {
+			var lenBuf [8]byte
+			if _, err := io.ReadFull(c.br, lenBuf[:]); err != nil {
 				return 0, nil, err
 			}
-			payloadLen = binary.BigEndian.Uint64(lenBuf)
+			payloadLen = binary.BigEndian.Uint64(lenBuf[:])
 		default:
 			payloadLen = lenField
 		}
@@ -249,22 +249,24 @@ func (c *Conn) writeFrame(opcode int, payload []byte) error {
 	}
 
 	length := len(payload)
-	var header []byte
-
-	b0 := byte(0x80 | (opcode & 0x0F)) // FIN=1
+	var header [10]byte
+	header[0] = byte(0x80 | (opcode & 0x0F)) // FIN=1
+	var headerLen int
 
 	if length < 126 {
-		header = []byte{b0, byte(length)}
+		header[1] = byte(length)
+		headerLen = 2
 	} else if length <= 65535 {
-		header = []byte{b0, 126, byte(length >> 8), byte(length & 0xFF)}
+		header[1] = 126
+		binary.BigEndian.PutUint16(header[2:], uint16(length))
+		headerLen = 4
 	} else {
-		header = make([]byte, 10)
-		header[0] = b0
 		header[1] = 127
 		binary.BigEndian.PutUint64(header[2:], uint64(length))
+		headerLen = 10
 	}
 
-	if _, err := c.bw.Write(header); err != nil {
+	if _, err := c.bw.Write(header[:headerLen]); err != nil {
 		return err
 	}
 	if length > 0 {

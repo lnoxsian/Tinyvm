@@ -389,6 +389,75 @@ func (c *QMPClient) SystemReset() error {
 	return err
 }
 
+// EjectCDROM attempts to eject the CD-ROM drive medium in a running VM.
+func (c *QMPClient) EjectCDROM(force bool) error {
+	// First attempt ejecting with id "cdrom0"
+	_, err := c.Execute("eject", map[string]any{
+		"id":    "cdrom0",
+		"force": force,
+	})
+	if err == nil {
+		return nil
+	}
+
+	// Next attempt device "cdrom0"
+	_, err = c.Execute("eject", map[string]any{
+		"device": "cdrom0",
+		"force":  force,
+	})
+	if err == nil {
+		return nil
+	}
+
+	// Scan block devices for removable media
+	blocks, qErr := c.QueryBlock()
+	if qErr == nil {
+		for _, b := range blocks {
+			if b.Removable {
+				_, err = c.Execute("eject", map[string]any{
+					"id":    b.Device,
+					"force": force,
+				})
+				if err == nil {
+					return nil
+				}
+				_, err = c.Execute("eject", map[string]any{
+					"device": b.Device,
+					"force":  force,
+				})
+				if err == nil {
+					return nil
+				}
+			}
+		}
+	}
+
+	return err
+}
+
+// ChangeCDROM changes the medium in the CD-ROM drive to a new ISO file path.
+func (c *QMPClient) ChangeCDROM(isoPath string) error {
+	_, err := c.Execute("blockdev-change-medium", map[string]any{
+		"id":       "cdrom0",
+		"filename": isoPath,
+	})
+	if err == nil {
+		return nil
+	}
+	_, err = c.Execute("change", map[string]any{
+		"device": "cdrom0",
+		"target": isoPath,
+	})
+	if err == nil {
+		return nil
+	}
+	_, err = c.Execute("change", map[string]any{
+		"id":     "cdrom0",
+		"target": isoPath,
+	})
+	return err
+}
+
 // Greeting returns the QEMU greeting details received during handshake.
 func (c *QMPClient) Greeting() *QMPGreeting {
 	c.mu.Lock()
@@ -444,6 +513,76 @@ func QMPSystemPowerdown(socketPath string, timeout time.Duration) error {
 	defer client.Close()
 
 	return client.SystemPowerdown()
+}
+
+// QMPEjectCDROM connects to the QMP socket and ejects the CD-ROM tray.
+func QMPEjectCDROM(socketPath string, timeout time.Duration) error {
+	client := NewQMPClient(socketPath)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return err
+	}
+	defer client.Close()
+
+	return client.EjectCDROM(true)
+}
+
+// QMPChangeCDROM connects to the QMP socket and changes the CD-ROM image.
+func QMPChangeCDROM(socketPath string, isoPath string, timeout time.Duration) error {
+	client := NewQMPClient(socketPath)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return err
+	}
+	defer client.Close()
+
+	return client.ChangeCDROM(isoPath)
+}
+
+// QMPSystemReset connects to the QMP socket and issues a hard reset.
+func QMPSystemReset(socketPath string, timeout time.Duration) error {
+	client := NewQMPClient(socketPath)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return err
+	}
+	defer client.Close()
+
+	return client.SystemReset()
+}
+
+// QMPPause connects to the QMP socket and pauses CPU execution.
+func QMPPause(socketPath string, timeout time.Duration) error {
+	client := NewQMPClient(socketPath)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return err
+	}
+	defer client.Close()
+
+	return client.Stop()
+}
+
+// QMPResume connects to the QMP socket and resumes CPU execution.
+func QMPResume(socketPath string, timeout time.Duration) error {
+	client := NewQMPClient(socketPath)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return err
+	}
+	defer client.Close()
+
+	return client.Cont()
 }
 
 // QMPQueryStatus queries the VM execution status via QMP on the specified socket.

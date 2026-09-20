@@ -276,30 +276,6 @@ function syncRAM(val) {
     const num = document.getElementById("ram-number");
     if (slider) slider.value = val;
     if (num) num.value = val;
-
-    // Highlight active preset button if matches
-    const presets = document.querySelectorAll("#wizard-panel-2 .btn-preset");
-    presets.forEach((btn) => {
-        btn.classList.toggle("active", btn.textContent.includes(`${val} MB`));
-    });
-}
-
-function setRAMPreset(mb, btn) {
-    syncRAM(mb);
-    const presets = document.querySelectorAll("#wizard-panel-2 .btn-preset");
-    presets.forEach((b) => b.classList.remove("active"));
-    if (btn) btn.classList.add("active");
-}
-
-function setDiskPreset(sizeStr) {
-    const diskInput = document.getElementById("vm-disk-size");
-    if (diskInput) {
-        diskInput.value = sizeStr;
-    }
-    const presets = document.querySelectorAll("#wizard-panel-3 .btn-preset");
-    presets.forEach((btn) => {
-        btn.classList.toggle("active", btn.textContent.includes(sizeStr.replace("G", " GB")));
-    });
 }
 
 function toggleNetworkFields(checked) {

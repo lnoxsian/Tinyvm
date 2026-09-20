@@ -1,10 +1,9 @@
 package host
 
 import (
-	"fmt"
+	"bytes"
 	"os"
 	"strconv"
-	"strings"
 )
 
 // MemoryInfo captures total, available, and used host RAM in bytes.
@@ -14,6 +13,12 @@ type MemoryInfo struct {
 	UsedBytes      uint64 `json:"used_bytes"`
 }
 
+var (
+	memTotalPrefix = []byte("MemTotal:")
+	memAvailPrefix = []byte("MemAvailable:")
+	pageSize       = uint64(os.Getpagesize())
+)
+
 // GetMemoryInfo reads host memory metrics from /proc/meminfo.
 func GetMemoryInfo() MemoryInfo {
 	data, err := os.ReadFile("/proc/meminfo")
@@ -22,16 +27,36 @@ func GetMemoryInfo() MemoryInfo {
 	}
 
 	var totalKB, availKB uint64
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
+	var foundTotal, foundAvail bool
+
+	rest := data
+	for len(rest) > 0 {
+		var line []byte
+		idx := bytes.IndexByte(rest, '\n')
+		if idx >= 0 {
+			line = rest[:idx]
+			rest = rest[idx+1:]
+		} else {
+			line = rest
+			rest = nil
 		}
-		switch fields[0] {
-		case "MemTotal:":
-			totalKB, _ = strconv.ParseUint(fields[1], 10, 64)
-		case "MemAvailable:":
-			availKB, _ = strconv.ParseUint(fields[1], 10, 64)
+
+		if bytes.HasPrefix(line, memTotalPrefix) {
+			fields := bytes.Fields(line)
+			if len(fields) >= 2 {
+				totalKB, _ = strconv.ParseUint(string(fields[1]), 10, 64)
+				foundTotal = true
+			}
+		} else if bytes.HasPrefix(line, memAvailPrefix) {
+			fields := bytes.Fields(line)
+			if len(fields) >= 2 {
+				availKB, _ = strconv.ParseUint(string(fields[1]), 10, 64)
+				foundAvail = true
+			}
+		}
+
+		if foundTotal && foundAvail {
+			break
 		}
 	}
 
@@ -54,17 +79,18 @@ func GetProcessRSSBytes(pid int) uint64 {
 	if pid <= 0 {
 		return 0
 	}
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/statm", pid))
+	path := "/proc/" + strconv.Itoa(pid) + "/statm"
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
-	fields := strings.Fields(string(data))
+	fields := bytes.Fields(data)
 	if len(fields) < 2 {
 		return 0
 	}
-	pages, err := strconv.ParseUint(fields[1], 10, 64)
+	pages, err := strconv.ParseUint(string(fields[1]), 10, 64)
 	if err != nil {
 		return 0
 	}
-	return pages * uint64(os.Getpagesize())
+	return pages * pageSize
 }

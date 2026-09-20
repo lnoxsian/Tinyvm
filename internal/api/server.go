@@ -35,7 +35,41 @@ func NewServer(cfg *config.Config, logger *slog.Logger, vmMgr *vm.Manager) (*Ser
 		vmMgr:     vmMgr,
 	}
 
+	toFloat64 := func(v any) float64 {
+		switch n := v.(type) {
+		case int:
+			return float64(n)
+		case int64:
+			return float64(n)
+		case uint64:
+			return float64(n)
+		case float64:
+			return n
+		case float32:
+			return float64(n)
+		default:
+			return 0
+		}
+	}
+
 	funcMap := template.FuncMap{
+		"float64": toFloat64,
+		"div": func(a, b any) float64 {
+			fb := toFloat64(b)
+			if fb == 0 {
+				return 0
+			}
+			return toFloat64(a) / fb
+		},
+		"mul": func(a, b any) float64 {
+			return toFloat64(a) * toFloat64(b)
+		},
+		"add": func(a, b any) float64 {
+			return toFloat64(a) + toFloat64(b)
+		},
+		"sub": func(a, b any) float64 {
+			return toFloat64(a) - toFloat64(b)
+		},
 		"progressClass": func(pct int) string {
 			if pct > 85 {
 				return "danger"

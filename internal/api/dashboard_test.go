@@ -63,17 +63,34 @@ func TestDashboard_HostStatsAndRendering(t *testing.T) {
 	if !strings.Contains(body, "dash-vm-1") {
 		t.Errorf("expected body to contain 'dash-vm-1'")
 	}
-	if !strings.Contains(body, "BIOS") {
-		t.Errorf("expected body to contain 'BIOS'")
+	// Per overview requirements: BIOS/UEFI and OS name are omitted from the overview card
+	if strings.Contains(body, ">BIOS<") {
+		t.Errorf("expected overview card NOT to contain 'BIOS' badge")
 	}
-	if !strings.Contains(body, "Linux") {
-		t.Errorf("expected body to contain 'Linux' OSType badge")
+	if strings.Contains(body, ">Linux<") {
+		t.Errorf("expected overview card NOT to contain 'Linux' badge")
 	}
 	if !strings.Contains(body, "1024 MB") {
 		t.Errorf("expected body to contain '1024 MB'")
 	}
-	if !strings.Contains(body, "Edit") {
-		t.Errorf("expected body to contain 'Edit' button")
+	if !strings.Contains(body, "Delete") {
+		t.Errorf("expected body to contain 'Delete' button")
+	}
+
+	// Verify detail page still displays BIOS and Linux
+	detailReq := httptest.NewRequest(http.MethodGet, "/vms/dash-vm-1", nil)
+	detailReq.Header.Set("Accept", "text/html")
+	detailRec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(detailRec, detailReq)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on /vms/dash-vm-1, got %d", detailRec.Code)
+	}
+	detailBody := detailRec.Body.String()
+	if !strings.Contains(detailBody, "BIOS") {
+		t.Errorf("expected detail body to contain 'BIOS'")
+	}
+	if !strings.Contains(detailBody, "Linux") {
+		t.Errorf("expected detail body to contain 'Linux'")
 	}
 }
 
@@ -138,8 +155,11 @@ func TestDashboard_HTMXPartials(t *testing.T) {
 	if !strings.Contains(body, "Partial Test VM") {
 		t.Errorf("expected partial card to contain 'Partial Test VM'")
 	}
-	if !strings.Contains(body, "UEFI") {
-		t.Errorf("expected partial card to contain 'UEFI'")
+	if strings.Contains(body, ">UEFI<") {
+		t.Errorf("expected partial card NOT to contain 'UEFI' badge")
+	}
+	if !strings.Contains(body, "512 MB") {
+		t.Errorf("expected partial card to contain '512 MB'")
 	}
 }
 
@@ -178,17 +198,11 @@ func TestDashboard_HTMXLifecycleActions(t *testing.T) {
 	if !strings.Contains(cardHTML, "id=\"vm-card-htmx-lifecycle-vm\"") {
 		t.Errorf("expected cardHTML to contain 'id=\"vm-card-htmx-lifecycle-vm\"'")
 	}
-	if !strings.Contains(cardHTML, "running") {
-		t.Errorf("expected cardHTML to contain 'running'")
+	if !strings.Contains(cardHTML, "status-running") {
+		t.Errorf("expected cardHTML to contain 'status-running'")
 	}
-	if !strings.Contains(cardHTML, "Console") {
-		t.Errorf("expected cardHTML to contain 'Console' action button")
-	}
-	if !strings.Contains(cardHTML, "Shutdown") {
-		t.Errorf("expected cardHTML to contain 'Shutdown' action button")
-	}
-	if !strings.Contains(cardHTML, "Force Stop") {
-		t.Errorf("expected cardHTML to contain 'Force Stop' action button")
+	if !strings.Contains(cardHTML, "Delete") {
+		t.Errorf("expected cardHTML to contain 'Delete' action button")
 	}
 
 	// 2. Stop VM with HX-Request -> returns rendered VM card in stopped state
@@ -204,11 +218,14 @@ func TestDashboard_HTMXLifecycleActions(t *testing.T) {
 		t.Errorf("expected HX-Trigger: vm-updated on stop")
 	}
 	stoppedCardHTML := rec.Body.String()
-	if !strings.Contains(stoppedCardHTML, "stopped") {
-		t.Errorf("expected stoppedCardHTML to contain 'stopped'")
+	if !strings.Contains(stoppedCardHTML, "status-stopped") {
+		t.Errorf("expected stoppedCardHTML to contain 'status-stopped'")
 	}
-	if !strings.Contains(stoppedCardHTML, "Start") {
-		t.Errorf("expected stoppedCardHTML to contain 'Start' action button")
+	if !strings.Contains(stoppedCardHTML, "Delete") {
+		t.Errorf("expected stoppedCardHTML to contain 'Delete' action button")
+	}
+	if !strings.Contains(stoppedCardHTML, ">0<") {
+		t.Errorf("expected stoppedCardHTML to contain '0' value for PID stat")
 	}
 
 	// 3. Delete VM with HX-Request -> returns 200 OK with empty body and HX-Trigger: vm-updated

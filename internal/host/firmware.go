@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 var (
@@ -44,8 +45,20 @@ var ovmfSingleFiles = []string{
 	"/usr/share/edk2/ovmf/OVMF.fd",
 }
 
-// DetectUEFIFirmware checks the host for installed OVMF UEFI firmware packages.
+var (
+	uefiOnce   sync.Once
+	cachedUEFI UEFIFirmware
+)
+
+// DetectUEFIFirmware checks the host for installed OVMF UEFI firmware packages (cached after initial discovery).
 func DetectUEFIFirmware() UEFIFirmware {
+	uefiOnce.Do(func() {
+		cachedUEFI = detectUEFIFirmwareUncached()
+	})
+	return cachedUEFI
+}
+
+func detectUEFIFirmwareUncached() UEFIFirmware {
 	for _, pair := range ovmfSplitPairs {
 		if fileExists(pair.code) && fileExists(pair.vars) {
 			return UEFIFirmware{

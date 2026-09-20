@@ -2,6 +2,7 @@ package vm
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -187,4 +188,97 @@ func TestQMP_StatusAndQuitVM(t *testing.T) {
 		t.Fatalf("failed to delete VM: %v", err)
 	}
 }
+
+func TestEjectAndBootVM(t *testing.T) {
+	mgr, tmpDir := newTestManager(t)
+	defer os.RemoveAll(tmpDir)
+
+	if mgr.Launcher() == nil {
+		t.Skip("QEMU launcher not available, skipping test")
+	}
+
+	// Create a dummy ISO image in storage
+	isoName := "test-installer.iso"
+	isoFile := filepath.Join(mgr.Storage().ISODir(), isoName)
+	if err := os.WriteFile(isoFile, []byte("fake iso data"), 0644); err != nil {
+		t.Fatalf("failed to create test iso: %v", err)
+	}
+
+	cfg := VMConfig{
+		ID:         "boot-test-vm",
+		Name:       "Boot Test VM",
+		CPUs:       1,
+		MemoryMB:   256,
+		Disk:       "disk.qcow2",
+		DiskFormat: "qcow2",
+		DiskSize:   "10M",
+		ISO:        isoName,
+	}
+
+	if _, err := mgr.CreateVM(cfg); err != nil {
+		t.Fatalf("failed to create VM with ISO: %v", err)
+	}
+
+	// Verify ISO is initially configured
+	v, err := mgr.GetVM("boot-test-vm")
+	if err != nil || v.Config.ISO != isoName {
+		t.Fatalf("expected ISO '%s', got '%s'", isoName, v.Config.ISO)
+	}
+
+	// 1. Test EjectISO when VM is stopped
+	if err := mgr.EjectISO("boot-test-vm"); err != nil {
+		t.Fatalf("EjectISO failed: %v", err)
+	}
+
+	v, _ = mgr.GetVM("boot-test-vm")
+	if v.Config.ISO != "" {
+		t.Errorf("expected ISO to be empty after eject, got '%s'", v.Config.ISO)
+	}
+
+	// Verify persisted config on disk
+	var diskCfg VMConfig
+	if err := mgr.Storage().ReadVMConfig("boot-test-vm", &diskCfg); err != nil {
+		t.Fatalf("failed to read persisted config: %v", err)
+	}
+	if diskCfg.ISO != "" {
+		t.Errorf("expected persisted ISO to be empty, got '%s'", diskCfg.ISO)
+	}
+
+	// 2. Test AttachISO
+	if err := mgr.AttachISO("boot-test-vm", isoName); err != nil {
+		t.Fatalf("AttachISO failed: %v", err)
+	}
+	v, _ = mgr.GetVM("boot-test-vm")
+	if v.Config.ISO != isoName {
+		t.Errorf("expected attached ISO '%s', got '%s'", isoName, v.Config.ISO)
+	}
+
+	// 3. Test BootVM (should automatically eject ISO and boot the VM from disk)
+	if err := mgr.BootVM("boot-test-vm"); err != nil {
+		t.Fatalf("BootVM failed: %v", err)
+	}
+
+	v, _ = mgr.GetVM("boot-test-vm")
+	if v.Config.ISO != "" {
+		t.Errorf("expected ISO to be cleared after BootVM, got '%s'", v.Config.ISO)
+	}
+	if !mgr.IsVMRunning("boot-test-vm") {
+		t.Errorf("expected VM to be running after BootVM")
+	}
+
+	// 4. Test live EjectISO when VM is running
+	_ = mgr.AttachISO("boot-test-vm", isoName)
+	if err := mgr.EjectISO("boot-test-vm"); err != nil {
+		t.Fatalf("live EjectISO failed: %v", err)
+	}
+	v, _ = mgr.GetVM("boot-test-vm")
+	if v.Config.ISO != "" {
+		t.Errorf("expected live ejected ISO to be empty, got '%s'", v.Config.ISO)
+	}
+
+	// Clean up
+	_ = mgr.StopVM("boot-test-vm")
+	_ = mgr.DeleteVM("boot-test-vm")
+}
+
 

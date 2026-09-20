@@ -37,6 +37,8 @@ Commands:
   shutdown    Gracefully shut down a virtual machine (ACPI via QMP)
   stop        Force stop a virtual machine (SIGTERM/SIGKILL)
   restart     Restart a virtual machine
+  boot        Boot a virtual machine from disk (ejects ISO if attached)
+  eject       Eject attached ISO from a virtual machine (use -boot to boot after eject)
   delete      Delete a virtual machine and its storage
   status      Show the status of a virtual machine
   qmp         Execute a QMP command against a running virtual machine
@@ -109,6 +111,14 @@ func main() {
 
 	case "restart":
 		runRestart(args[1:])
+		return
+
+	case "boot":
+		runBoot(args[1:])
+		return
+
+	case "eject":
+		runEject(args[1:])
 		return
 
 	case "delete":
@@ -329,6 +339,60 @@ func runRestart(args []string) {
 
 	v, _ := mgr.GetVM(vmID)
 	fmt.Printf("VM '%s' restarted successfully (PID: %d)\n", vmID, v.Runtime.PID)
+}
+
+func runBoot(args []string) {
+	vmID, dataDir := parseVMIDAndDataDir("boot", args)
+	mgr, err := getManagerForDir(dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Booting virtual machine '%s' from disk (detaching ISO if present)...\n", vmID)
+	if err := mgr.BootVM(vmID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	v, _ := mgr.GetVM(vmID)
+	fmt.Printf("VM '%s' booted successfully from hard disk (PID: %d).\n", vmID, v.Runtime.PID)
+}
+
+func runEject(args []string) {
+	var bootFlag bool
+	var filteredArgs []string
+	for _, arg := range args {
+		if arg == "-boot" || arg == "--boot" {
+			bootFlag = true
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+
+	vmID, dataDir := parseVMIDAndDataDir("eject", filteredArgs)
+	mgr, err := getManagerForDir(dataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Ejecting attached ISO from virtual machine '%s'...\n", vmID)
+	if err := mgr.EjectISO(vmID); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("ISO detached successfully from VM '%s'.\n", vmID)
+
+	if bootFlag {
+		fmt.Printf("Booting virtual machine '%s' from disk...\n", vmID)
+		if err := mgr.BootVM(vmID); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		v, _ := mgr.GetVM(vmID)
+		fmt.Printf("VM '%s' booted successfully from hard disk (PID: %d).\n", vmID, v.Runtime.PID)
+	}
 }
 
 func runDelete(args []string) {

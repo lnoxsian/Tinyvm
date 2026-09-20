@@ -1,7 +1,7 @@
 package host
 
 import (
-	"fmt"
+	"bytes"
 	"math"
 	"os"
 	"runtime"
@@ -22,6 +22,8 @@ var (
 	cpuMu        sync.Mutex
 	lastCPUTotal uint64
 	lastCPUBusy  uint64
+	cpuModelOnce sync.Once
+	cachedModel  string
 )
 
 // GetCPUUsagePercent reads /proc/stat to calculate CPU usage percentage,
@@ -32,49 +34,52 @@ func GetCPUUsagePercent() int {
 		return getFallbackCPUUsage()
 	}
 
-	for _, line := range strings.Split(string(data), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 5 && fields[0] == "cpu" {
-			var total, busy uint64
-			for i := 1; i < len(fields); i++ {
-				val, err := strconv.ParseUint(fields[i], 10, 64)
-				if err != nil {
-					continue
-				}
-				total += val
-				// user(1), nice(2), system(3), irq(6), softirq(7), steal(8)
-				if i == 1 || i == 2 || i == 3 || i == 6 || i == 7 || i == 8 {
-					busy += val
-				}
+	firstLine := data
+	if idx := bytes.IndexByte(data, '\n'); idx >= 0 {
+		firstLine = data[:idx]
+	}
+
+	fields := bytes.Fields(firstLine)
+	if len(fields) >= 5 && bytes.Equal(fields[0], []byte("cpu")) {
+		var total, busy uint64
+		for i := 1; i < len(fields); i++ {
+			val, err := strconv.ParseUint(string(fields[i]), 10, 64)
+			if err != nil {
+				continue
 			}
-
-			cpuMu.Lock()
-			defer cpuMu.Unlock()
-
-			if lastCPUTotal == 0 || total <= lastCPUTotal {
-				lastCPUTotal = total
-				lastCPUBusy = busy
-				return getFallbackCPUUsage()
+			total += val
+			// user(1), nice(2), system(3), irq(6), softirq(7), steal(8)
+			if i == 1 || i == 2 || i == 3 || i == 6 || i == 7 || i == 8 {
+				busy += val
 			}
+		}
 
-			deltaTotal := total - lastCPUTotal
-			deltaBusy := busy - lastCPUBusy
+		cpuMu.Lock()
+		defer cpuMu.Unlock()
+
+		if lastCPUTotal == 0 || total <= lastCPUTotal {
 			lastCPUTotal = total
 			lastCPUBusy = busy
-
-			if deltaTotal == 0 {
-				return 0
-			}
-
-			percent := int((deltaBusy * 100) / deltaTotal)
-			if percent < 0 {
-				percent = 0
-			}
-			if percent > 100 {
-				percent = 100
-			}
-			return percent
+			return getFallbackCPUUsage()
 		}
+
+		deltaTotal := total - lastCPUTotal
+		deltaBusy := busy - lastCPUBusy
+		lastCPUTotal = total
+		lastCPUBusy = busy
+
+		if deltaTotal == 0 {
+			return 0
+		}
+
+		percent := int((float64(deltaBusy) / float64(deltaTotal)) * 100)
+		if percent < 0 {
+			percent = 0
+		}
+		if percent > 100 {
+			percent = 100
+		}
+		return percent
 	}
 
 	return getFallbackCPUUsage()
@@ -85,9 +90,9 @@ func getFallbackCPUUsage() int {
 	if err != nil {
 		return 0
 	}
-	fields := strings.Fields(string(data))
+	fields := bytes.Fields(data)
 	if len(fields) > 0 {
-		if load, err := strconv.ParseFloat(fields[0], 64); err == nil {
+		if load, err := strconv.ParseFloat(string(fields[0]), 64); err == nil {
 			cores := float64(runtime.NumCPU())
 			if cores <= 0 {
 				cores = 1
@@ -105,25 +110,30 @@ func getFallbackCPUUsage() int {
 	return 0
 }
 
-// GetCPUInfo returns the logical CPU core count, processor model name, and usage percentage.
-func GetCPUInfo() CPUInfo {
-	model := "Generic x86_64 Processor"
-	data, err := os.ReadFile("/proc/cpuinfo")
-	if err == nil {
-		for _, line := range strings.Split(string(data), "\n") {
-			if strings.HasPrefix(line, "model name") {
-				parts := strings.SplitN(line, ":", 2)
-				if len(parts) == 2 {
-					model = strings.TrimSpace(parts[1])
-					break
+func getCPUModel() string {
+	cpuModelOnce.Do(func() {
+		cachedModel = "Generic x86_64 Processor"
+		data, err := os.ReadFile("/proc/cpuinfo")
+		if err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				if strings.HasPrefix(line, "model name") {
+					parts := strings.SplitN(line, ":", 2)
+					if len(parts) == 2 {
+						cachedModel = strings.TrimSpace(parts[1])
+						break
+					}
 				}
 			}
 		}
-	}
+	})
+	return cachedModel
+}
 
+// GetCPUInfo returns the logical CPU core count, processor model name, and usage percentage.
+func GetCPUInfo() CPUInfo {
 	return CPUInfo{
 		Count:        runtime.NumCPU(),
-		Model:        model,
+		Model:        getCPUModel(),
 		UsagePercent: GetCPUUsagePercent(),
 	}
 }
@@ -146,7 +156,8 @@ func GetProcessCPUPercent(pid int) float64 {
 		return 0.0
 	}
 
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	path := "/proc/" + strconv.Itoa(pid) + "/stat"
+	data, err := os.ReadFile(path)
 	if err != nil {
 		procCPUMu.Lock()
 		delete(procCPUSamples, pid)
@@ -154,20 +165,19 @@ func GetProcessCPUPercent(pid int) float64 {
 		return 0.0
 	}
 
-	content := string(data)
-	lastParen := strings.LastIndex(content, ")")
-	if lastParen == -1 || lastParen+2 >= len(content) {
+	lastParen := bytes.LastIndexByte(data, ')')
+	if lastParen == -1 || lastParen+2 >= len(data) {
 		return 0.0
 	}
 
-	rest := strings.TrimSpace(content[lastParen+2:])
-	fields := strings.Fields(rest)
+	rest := bytes.TrimSpace(data[lastParen+2:])
+	fields := bytes.Fields(rest)
 	if len(fields) <= 12 {
 		return 0.0
 	}
 
-	utime, err1 := strconv.ParseUint(fields[11], 10, 64)
-	stime, err2 := strconv.ParseUint(fields[12], 10, 64)
+	utime, err1 := strconv.ParseUint(string(fields[11]), 10, 64)
+	stime, err2 := strconv.ParseUint(string(fields[12]), 10, 64)
 	if err1 != nil || err2 != nil {
 		return 0.0
 	}
@@ -207,11 +217,11 @@ func GetProcessCPUPercent(pid int) float64 {
 
 	// First sample: try to estimate using starttime and /proc/uptime
 	if len(fields) > 19 {
-		if starttimeTicks, err := strconv.ParseUint(fields[19], 10, 64); err == nil {
+		if starttimeTicks, err := strconv.ParseUint(string(fields[19]), 10, 64); err == nil {
 			if uptimeData, err := os.ReadFile("/proc/uptime"); err == nil {
-				uptimeFields := strings.Fields(string(uptimeData))
+				uptimeFields := bytes.Fields(uptimeData)
 				if len(uptimeFields) > 0 {
-					if hostUptimeSecs, err := strconv.ParseFloat(uptimeFields[0], 64); err == nil {
+					if hostUptimeSecs, err := strconv.ParseFloat(string(uptimeFields[0]), 64); err == nil {
 						hostUptimeTicks := hostUptimeSecs * 100.0
 						if hostUptimeTicks > float64(starttimeTicks) {
 							procElapsedTicks := hostUptimeTicks - float64(starttimeTicks)

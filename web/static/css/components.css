@@ -61,7 +61,7 @@
     width: 100%;
     height: 6px;
     background-color: var(--panel-subtle);
-    border-radius: 3px;
+    border-radius: 0;
     overflow: hidden;
     margin-top: 0.25rem;
 }
@@ -69,8 +69,7 @@
 .progress-bar-fill {
     height: 100%;
     background-color: var(--accent-blue);
-    border-radius: 3px;
-    transition: width 0.3s ease;
+    border-radius: 0;
 }
 
 .progress-bar-fill.accent {
@@ -137,6 +136,24 @@
     font-size: 0.75rem;
 }
 
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 0;
+}
+
+.btn-icon svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+
 /* VM Cards Grid */
 .vm-grid {
     display: grid;
@@ -161,15 +178,19 @@
 
 .vm-card-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
 }
 
 .vm-title-group {
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
 }
 
 .vm-name {
@@ -177,6 +198,9 @@
     font-size: 1rem;
     color: var(--text);
     text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .vm-name:hover {
@@ -186,8 +210,49 @@
 
 .vm-id-tag {
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Status square indicator in top right corner */
+.vm-status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 0;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.vm-status-indicator.status-running {
+    background-color: #3fb950;
+    box-shadow: 0 0 6px rgba(63, 185, 80, 0.6);
+}
+
+.vm-status-indicator.status-stopped,
+.vm-status-indicator.status-error {
+    background-color: #f85149;
+}
+
+.vm-status-indicator.status-paused {
+    background-color: #8b949e;
+}
+
+.vm-status-indicator.status-stopping {
+    background-color: #f85149;
+    animation: blink-red 1s ease-in-out infinite;
+}
+
+@keyframes blink-red {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.2;
+        transform: scale(0.85);
+    }
 }
 
 .vm-badges {
@@ -206,14 +271,14 @@
     padding: 0.15rem 0.5rem;
     font-size: 0.75rem;
     font-weight: 500;
-    border-radius: 9999px;
+    border-radius: 0;
     border: 1px solid var(--border);
 }
 
 .badge-dot {
     width: 6px;
     height: 6px;
-    border-radius: 50%;
+    border-radius: 0;
     background-color: currentColor;
 }
 
@@ -258,6 +323,22 @@
     color: #d29922;
 }
 
+.badge.stopping {
+    background-color: rgba(210, 153, 34, 0.2);
+    border-color: rgba(210, 153, 34, 0.5);
+    color: #e3b341;
+}
+
+.badge.stopping .badge-dot {
+    animation: pulse-dot 0.8s infinite;
+}
+
+.badge.paused {
+    background-color: rgba(234, 179, 8, 0.15);
+    border-color: rgba(234, 179, 8, 0.4);
+    color: #facc15;
+}
+
 @keyframes pulse-dot {
     0% { transform: scale(0.95); opacity: 0.8; }
     50% { transform: scale(1.25); opacity: 1; }
@@ -296,20 +377,33 @@
     font-size: 0.85rem;
 }
 
-/* Runtime Info (PID, Uptime) */
+/* Card Footer & Runtime Info */
+.vm-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: auto;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border-subtle);
+}
+
 .vm-runtime-info {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
     font-size: 0.75rem;
     color: var(--text-muted);
     font-family: var(--font-mono);
+    min-width: 0;
 }
 
 .vm-runtime-item {
     display: flex;
     align-items: center;
     gap: 0.3rem;
+    white-space: nowrap;
 }
 
 .vm-runtime-val {
@@ -320,11 +414,10 @@
 /* Actions Row */
 .vm-actions {
     display: flex;
-    gap: 0.5rem;
-    margin-top: 0.25rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border-subtle);
-    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    flex-shrink: 0;
 }
 
 /* Header actions & Subtitles */
@@ -345,11 +438,41 @@
     gap: 0.5rem;
 }
 
-/* HTMX Transition & Request Indicators */
-.htmx-request {
-    opacity: 0.6;
+/* HTMX Transition & Request Indicators - only dim active interactive triggers (buttons/forms) */
+button.htmx-request,
+.btn.htmx-request,
+form.htmx-request {
+    opacity: 0.7;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.15s ease;
+}
+
+/* Ensure background polling and stat panels never dim, flash, or flicker */
+#stats-grid,
+#stats-grid.htmx-request,
+#stats-grid.htmx-swapping,
+#stats-grid.htmx-settling,
+#vm-grid,
+#vm-grid.htmx-request,
+#vm-grid.htmx-swapping,
+#vm-grid.htmx-settling,
+#vm-telemetry,
+#vm-telemetry.htmx-request,
+#vm-telemetry.htmx-swapping,
+#vm-telemetry.htmx-settling,
+.stats-grid,
+.stats-grid.htmx-request,
+.vm-grid-container,
+.vm-grid-container.htmx-request,
+.vm-telemetry-panel,
+.vm-telemetry-panel.htmx-request,
+.stat-card,
+.stat-card.htmx-request,
+.vm-card,
+.vm-card.htmx-request {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    transition: none !important;
 }
 
 /* Empty State */
@@ -833,4 +956,101 @@ select.form-control {
     flex-shrink: 0;
     width: 18px;
     height: 18px;
+}
+
+/* Proxmox-Style Tabs & Hardware Table */
+.pve-tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.25rem;
+    overflow-x: auto;
+}
+
+.pve-tab {
+    padding: 0.6rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.pve-tab:hover {
+    color: var(--text);
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.pve-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+}
+
+.pve-tab-content {
+    display: none;
+}
+
+.pve-tab-content.active {
+    display: block;
+}
+
+.pve-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.pve-table th, .pve-table td {
+    padding: 0.7rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.pve-table th {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background-color: var(--panel-subtle);
+}
+
+.pve-table tr:hover td {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.pve-table td.property-name {
+    width: 220px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.pve-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.log-viewer {
+    background-color: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    color: #c9d1d9;
+    max-height: 480px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.45;
 }

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"tinyvm/internal/vm"
 )
 
 func TestAPIVMs_CRUD(t *testing.T) {
@@ -653,4 +655,87 @@ func TestAPIVMs_StatusJSONBodyAndTopLevelFields(t *testing.T) {
 		t.Errorf("expected top-level memory_mb 512, got %v", statusResp["memory_mb"])
 	}
 }
+
+func TestAPIVMs_EjectAndBoot(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Create test ISO in storage
+	isoName := "installer-alpine.iso"
+	_, err := srv.vmMgr.Storage().SaveISO(isoName, bytes.NewReader([]byte("iso test bits")))
+	if err != nil {
+		t.Fatalf("failed to create test ISO: %v", err)
+	}
+
+	body, _ := json.Marshal(CreateVMRequest{
+		ID:         "eject-api-vm",
+		Name:       "Eject API VM",
+		CPUs:       1,
+		MemoryMB:   256,
+		DiskSize:   "10M",
+		DiskFormat: "qcow2",
+		ISO:        isoName,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/vms", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("failed to create VM: %d", rec.Code)
+	}
+
+	// 1. Eject ISO via POST /api/v1/vms/eject-api-vm/eject-iso
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/vms/eject-api-vm/eject-iso", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on eject-iso, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var ejectResp ActionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&ejectResp); err != nil {
+		t.Fatalf("failed to decode eject response: %v", err)
+	}
+	if ejectResp.Status != "ejected" {
+		t.Errorf("expected status 'ejected', got '%s'", ejectResp.Status)
+	}
+
+	// Verify VM config now has empty ISO
+	targetVM, err := srv.vmMgr.GetVM("eject-api-vm")
+	if err != nil || targetVM.Config.ISO != "" {
+		t.Errorf("expected VM ISO to be empty, got '%s'", targetVM.Config.ISO)
+	}
+
+	// Re-attach ISO directly for boot test
+	_ = srv.vmMgr.AttachISO("eject-api-vm", isoName)
+
+	// 2. Boot VM via POST /vms/eject-api-vm/boot
+	req = httptest.NewRequest(http.MethodPost, "/vms/eject-api-vm/boot", nil)
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on boot, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	targetVM, _ = srv.vmMgr.GetVM("eject-api-vm")
+	if targetVM.Config.ISO != "" {
+		t.Errorf("expected ISO to be automatically cleared on boot, got '%s'", targetVM.Config.ISO)
+	}
+	if targetVM.Runtime.State != vm.StateRunning {
+		t.Errorf("expected VM to be running after boot, got %s", targetVM.Runtime.State)
+	}
+
+	// 3. Live eject via shorthand POST /eject-iso with JSON body
+	_ = srv.vmMgr.AttachISO("eject-api-vm", isoName)
+	actionBody, _ := json.Marshal(VMActionRequest{ID: "eject-api-vm"})
+	req = httptest.NewRequest(http.MethodPost, "/eject-iso", bytes.NewReader(actionBody))
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on live eject-iso shorthand, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Clean up
+	_ = srv.vmMgr.StopVM("eject-api-vm")
+	_ = srv.vmMgr.DeleteVM("eject-api-vm")
+}
+
 

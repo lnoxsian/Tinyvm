@@ -110,6 +110,10 @@ func (m *Manager) GetVMMetrics(id string) (*VMMetrics, error) {
 	runtime := v.Runtime
 	m.mu.RUnlock()
 
+	return m.collectVMMetrics(cfg, runtime), nil
+}
+
+func (m *Manager) collectVMMetrics(cfg VMConfig, runtime VMRuntime) *VMMetrics {
 	metrics := &VMMetrics{
 		ID:             cfg.ID,
 		Name:           cfg.Name,
@@ -154,21 +158,28 @@ func (m *Manager) GetVMMetrics(id string) (*VMMetrics, error) {
 		}
 	}
 
-	return metrics, nil
+	return metrics
 }
 
 // GetAllVMMetrics returns telemetry metrics for all registered VMs.
 func (m *Manager) GetAllVMMetrics() []VMMetrics {
 	m.mu.RLock()
-	ids := make([]string, 0, len(m.vms))
-	for id := range m.vms {
-		ids = append(ids, id)
+	type vmSnapshot struct {
+		cfg     VMConfig
+		runtime VMRuntime
+	}
+	snaps := make([]vmSnapshot, 0, len(m.vms))
+	for _, v := range m.vms {
+		snaps = append(snaps, vmSnapshot{
+			cfg:     v.Config,
+			runtime: v.Runtime,
+		})
 	}
 	m.mu.RUnlock()
 
-	result := make([]VMMetrics, 0, len(ids))
-	for _, id := range ids {
-		if met, err := m.GetVMMetrics(id); err == nil && met != nil {
+	result := make([]VMMetrics, 0, len(snaps))
+	for _, snap := range snaps {
+		if met := m.collectVMMetrics(snap.cfg, snap.runtime); met != nil {
 			result = append(result, *met)
 		}
 	}

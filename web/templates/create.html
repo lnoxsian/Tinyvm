@@ -171,12 +171,6 @@
                             <span style="color: var(--text-muted); font-size: 0.85rem;">MB</span>
                         </div>
                     </div>
-                    <div class="preset-group">
-                        <button type="button" class="btn-preset" onclick="setRAMPreset(1024, this)">1 GB (1024 MB)</button>
-                        <button type="button" class="btn-preset active" onclick="setRAMPreset(2048, this)">2 GB (2048 MB)</button>
-                        <button type="button" class="btn-preset" onclick="setRAMPreset(4096, this)">4 GB (4096 MB)</button>
-                        <button type="button" class="btn-preset" onclick="setRAMPreset(8192, this)">8 GB (8192 MB)</button>
-                    </div>
                 </div>
 
                 <div class="wizard-footer">
@@ -210,12 +204,6 @@
                         <input type="text" id="vm-disk-size" name="disk_size" class="form-control" 
                                value="20G" placeholder="e.g. 20G, 50G, 100G" required
                                pattern="^[0-9]+[MGTmgt]?$">
-                        <div class="preset-group">
-                            <button type="button" class="btn-preset" onclick="setDiskPreset('10G')">10 GB</button>
-                            <button type="button" class="btn-preset active" onclick="setDiskPreset('20G')">20 GB</button>
-                            <button type="button" class="btn-preset" onclick="setDiskPreset('40G')">40 GB</button>
-                            <button type="button" class="btn-preset" onclick="setDiskPreset('80G')">80 GB</button>
-                        </div>
                         <span class="form-hint">Size in Megabytes (M) or Gigabytes (G).</span>
                     </div>
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"tinyvm/internal/host"
@@ -63,6 +64,8 @@ type VMCardView struct {
 	CPUPercent  float64
 	SSHPort     int
 	IsRunning   bool
+	IsStopping  bool
+	IsPaused    bool
 }
 
 // CreateVMPageData provides context and hardware boundaries for the VM Creation Wizard.
@@ -100,14 +103,24 @@ type ISOViewModel struct {
 // VMDetailPageData provides presentation data for a specific VM view.
 type VMDetailPageData struct {
 	BasePageData
-	VM      *vm.VM
-	Metrics *vm.VMMetrics
+	VM            *vm.VM
+	Metrics       *vm.VMMetrics
+	AvailableISOs []string
+	Snapshots     []vm.SnapshotInfo
+	DiskInfo      *storage.DiskInfo
+	QEMULog       string
 }
 
 // VMConsolePageData provides presentation data for the interactive VM console view.
 type VMConsolePageData struct {
 	BasePageData
 	VM *vm.VM
+}
+
+var bufPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data any) {
@@ -117,8 +130,11 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 		return
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	if err := tmpl.Execute(buf, data); err != nil {
 		s.logger.Error("Failed to render template", "template", name, "err", err)
 		http.Error(w, "Template execution error", http.StatusInternalServerError)
 		return
@@ -129,13 +145,36 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	_, _ = buf.WriteTo(w)
 }
 
+var (
+	kvmCacheMu    sync.RWMutex
+	kvmCachedVal  bool
+	kvmCacheUntil time.Time
+)
+
 func checkKVM() bool {
+	kvmCacheMu.RLock()
+	if time.Now().Before(kvmCacheUntil) {
+		val := kvmCachedVal
+		kvmCacheMu.RUnlock()
+		return val
+	}
+	kvmCacheMu.RUnlock()
+
+	kvmCacheMu.Lock()
+	defer kvmCacheMu.Unlock()
+	if time.Now().Before(kvmCacheUntil) {
+		return kvmCachedVal
+	}
+
 	f, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
 	if err != nil {
-		return false
+		kvmCachedVal = false
+	} else {
+		_ = f.Close()
+		kvmCachedVal = true
 	}
-	_ = f.Close()
-	return true
+	kvmCacheUntil = time.Now().Add(5 * time.Second)
+	return kvmCachedVal
 }
 
 func toVMCardView(v *vm.VM) VMCardView {
@@ -151,17 +190,7 @@ func toVMCardView(v *vm.VM) VMCardView {
 
 	var uptimeStr string
 	if v.Runtime.State == vm.StateRunning && !v.Runtime.StartedAt.IsZero() {
-		dur := time.Since(v.Runtime.StartedAt).Round(time.Second)
-		h := int(dur.Hours())
-		m := int(dur.Minutes()) % 60
-		s := int(dur.Seconds()) % 60
-		if h > 0 {
-			uptimeStr = fmt.Sprintf("%dh %dm", h, m)
-		} else if m > 0 {
-			uptimeStr = fmt.Sprintf("%dm %ds", m, s)
-		} else {
-			uptimeStr = fmt.Sprintf("%ds", s)
-		}
+		uptimeStr = vm.FormatDuration(time.Since(v.Runtime.StartedAt))
 	}
 
 	var memUsedMB int
@@ -189,6 +218,8 @@ func toVMCardView(v *vm.VM) VMCardView {
 		CPUPercent:  cpuPercent,
 		SSHPort:     v.Config.Network.SSHPort,
 		IsRunning:   (st == "running"),
+		IsStopping:  (st == "stopping"),
+		IsPaused:    (st == "paused"),
 	}
 }
 
@@ -431,6 +462,44 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 
 	metrics, _ := s.vmMgr.GetVMMetrics(id)
 
+	var isoNames []string
+	if s.vmMgr.Storage() != nil {
+		if rawISOs, err := s.vmMgr.Storage().ListISOs(); err == nil {
+			for _, item := range rawISOs {
+				isoNames = append(isoNames, item.Name)
+			}
+		}
+	}
+
+	var snapshots []vm.SnapshotInfo
+	snapshots, _ = s.vmMgr.ListVMSnapshots(id)
+
+	var diskInfo *storage.DiskInfo
+	if s.vmMgr.Storage() != nil {
+		if vmDir, err := s.vmMgr.Storage().VMDir(id); err == nil {
+			diskName := targetVM.Config.Disk
+			if diskName == "" {
+				diskName = "disk.qcow2"
+			}
+			diskPath := filepath.Join(vmDir, diskName)
+			diskInfo, _ = storage.InspectDisk(diskPath)
+		}
+	}
+
+	var qemuLog string
+	if s.vmMgr.Storage() != nil {
+		if vmDir, err := s.vmMgr.Storage().VMDir(id); err == nil {
+			logPath := filepath.Join(vmDir, "logs", "qemu.log")
+			if data, err := os.ReadFile(logPath); err == nil {
+				if len(data) > 8192 {
+					qemuLog = string(data[len(data)-8192:])
+				} else {
+					qemuLog = string(data)
+				}
+			}
+		}
+	}
+
 	data := VMDetailPageData{
 		BasePageData: BasePageData{
 			ActiveNav:  "vms",
@@ -438,8 +507,12 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 			HostOnline: true,
 			KVMEnabled: checkKVM(),
 		},
-		VM:      targetVM,
-		Metrics: metrics,
+		VM:            targetVM,
+		Metrics:       metrics,
+		AvailableISOs: isoNames,
+		Snapshots:     snapshots,
+		DiskInfo:      diskInfo,
+		QEMULog:       qemuLog,
 	}
 	s.render(w, "detail", data)
 }

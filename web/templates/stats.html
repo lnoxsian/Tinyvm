@@ -1,5 +1,5 @@
 {{ define "stats-grid" }}
-<div class="stats-grid" id="stats-grid" hx-get="/partials/stats" hx-trigger="every 5s, vm-updated from:body" hx-swap="outerHTML">
+<div class="stats-grid" id="stats-grid" hx-get="/partials/stats" hx-trigger="every 5s, vm-updated from:body" hx-swap="outerHTML settle:0s">
     <div class="stat-card">
         <span class="stat-label">Virtual Machines</span>
         <div class="stat-value">{{ .TotalVMs }}</div>

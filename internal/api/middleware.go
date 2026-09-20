@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -15,6 +16,12 @@ type statusRecorder struct {
 	http.ResponseWriter
 	statusCode  int
 	wroteHeader bool
+}
+
+var statusRecorderPool = sync.Pool{
+	New: func() any {
+		return new(statusRecorder)
+	},
 }
 
 func (r *statusRecorder) WriteHeader(code int) {
@@ -43,7 +50,14 @@ func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 func (s *Server) LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		rec := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		rec := statusRecorderPool.Get().(*statusRecorder)
+		rec.ResponseWriter = w
+		rec.statusCode = http.StatusOK
+		rec.wroteHeader = false
+		defer func() {
+			rec.ResponseWriter = nil
+			statusRecorderPool.Put(rec)
+		}()
 
 		next.ServeHTTP(rec, r)
 

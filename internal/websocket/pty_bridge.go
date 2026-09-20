@@ -7,11 +7,15 @@ import (
 	"sync"
 )
 
+var resizeCommandPrefix = []byte(`{"type":"resize"}`)
+
 // BridgePTY streams data bidirectionally between a WebSocket connection and a PTYSession,
 // while handling terminal window resize control frames from xterm.js.
 func BridgePTY(ws *Conn, session *PTYSession, logger *slog.Logger) error {
 	defer session.Close()
 	defer ws.Close()
+
+	ptyFile := session.File()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -33,7 +37,7 @@ func BridgePTY(ws *Conn, session *PTYSession, logger *slog.Logger) error {
 				}
 
 				// Intercept window resize commands formatted as JSON
-				if bytes.HasPrefix(payload, []byte(`{"type":"resize"`)) {
+				if bytes.HasPrefix(payload, resizeCommandPrefix) {
 					var r struct {
 						Cols uint16 `json:"cols"`
 						Rows uint16 `json:"rows"`
@@ -45,7 +49,7 @@ func BridgePTY(ws *Conn, session *PTYSession, logger *slog.Logger) error {
 				}
 
 				// Forward user input bytes to PTY
-				if _, writeErr := session.File().Write(payload); writeErr != nil {
+				if _, writeErr := ptyFile.Write(payload); writeErr != nil {
 					break
 				}
 			}
@@ -60,7 +64,7 @@ func BridgePTY(ws *Conn, session *PTYSession, logger *slog.Logger) error {
 
 		buf := make([]byte, 4096)
 		for {
-			n, readErr := session.File().Read(buf)
+			n, readErr := ptyFile.Read(buf)
 			if n > 0 {
 				if writeErr := ws.WriteMessage(OpcodeText, buf[:n]); writeErr != nil {
 					break

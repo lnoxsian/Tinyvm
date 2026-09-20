@@ -1,5 +1,5 @@
 {{ define "vm-telemetry" }}
-<div class="vm-telemetry-panel" id="vm-telemetry" hx-get="/partials/vms/{{ .ID }}/metrics" hx-trigger="every 5s, vm-updated from:body" hx-swap="outerHTML">
+<div class="vm-telemetry-panel" id="vm-telemetry" hx-get="/partials/vms/{{ .ID }}/metrics" hx-trigger="every 5s, vm-updated from:body" hx-swap="outerHTML settle:0s">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
         <h3 style="font-size: 1.05rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

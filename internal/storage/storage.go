@@ -206,7 +206,7 @@ func (s *Storage) ListVMIDs() ([]string, error) {
 		return nil, fmt.Errorf("failed to read VMs directory: %w", err)
 	}
 
-	var vmIDs []string
+	vmIDs := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue

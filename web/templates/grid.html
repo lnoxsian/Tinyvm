@@ -1,5 +1,5 @@
 {{ define "vm-grid" }}
-<div class="vm-grid-container" id="vm-grid" hx-get="/partials/vms" hx-trigger="every 10s, vm-updated from:body" hx-swap="outerHTML">
+<div class="vm-grid-container" id="vm-grid" hx-get="/partials/vms" hx-trigger="every 10s, vm-updated from:body" hx-swap="outerHTML settle:0s">
     {{ if .VMs }}
     <div class="vm-grid">
         {{ range .VMs }}

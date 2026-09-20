@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -57,6 +59,16 @@ func (s *Storage) ISOPath(name string) (string, error) {
 	return targetPath, nil
 }
 
+// ISOExists checks whether the specified ISO file exists in the ISO storage pool.
+func (s *Storage) ISOExists(name string) bool {
+	isoPath, err := s.ISOPath(name)
+	if err != nil {
+		return false
+	}
+	info, err := os.Stat(isoPath)
+	return err == nil && !info.IsDir()
+}
+
 // ListISOs lists all ISO files stored in the ISO directory.
 func (s *Storage) ListISOs() ([]ISOInfo, error) {
 	entries, err := os.ReadDir(s.isoDir)
@@ -67,7 +79,7 @@ func (s *Storage) ListISOs() ([]ISOInfo, error) {
 		return nil, fmt.Errorf("failed to read ISO directory: %w", err)
 	}
 
-	var isos []ISOInfo
+	isos := make([]ISOInfo, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -189,4 +201,51 @@ func (s *Storage) DeleteISO(name string) error {
 	}
 
 	return os.Remove(isoPath)
+}
+
+// DownloadISO downloads an ISO file directly from a remote HTTP/HTTPS URL into storage.
+func (s *Storage) DownloadISO(urlStr string, customName string) (*ISOInfo, error) {
+	trimmedURL := strings.TrimSpace(urlStr)
+	parsed, err := url.Parse(trimmedURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return nil, errors.New("invalid download URL: must start with http:// or https://")
+	}
+
+	targetName := strings.TrimSpace(customName)
+	if targetName == "" {
+		targetName = filepath.Base(parsed.Path)
+	}
+	if !strings.HasSuffix(strings.ToLower(targetName), ".iso") {
+		targetName += ".iso"
+	}
+
+	if err := ValidateISOName(targetName); err != nil {
+		return nil, fmt.Errorf("invalid ISO filename '%s': %w", targetName, err)
+	}
+
+	if s.ISOExists(targetName) {
+		return nil, ErrISOExists
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Minute,
+	}
+
+	req, err := http.NewRequest("GET", trimmedURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create download request: %w", err)
+	}
+	req.Header.Set("User-Agent", "TinyVM-Downloader/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to download URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("download server returned HTTP %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	return s.SaveISO(targetName, resp.Body)
 }

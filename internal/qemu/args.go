@@ -33,6 +33,7 @@ type Config struct {
 	DiskFormat string        `json:"disk_format"`
 	ISO        string        `json:"iso,omitempty"`
 	Firmware   string        `json:"firmware,omitempty"` // "bios" or "uefi"
+	BootOrder  string        `json:"boot_order,omitempty"`
 	Network    NetworkConfig `json:"network"`
 }
 
@@ -130,8 +131,18 @@ func BuildArgs(cfg *Config, paths QEMUPaths, useKVM bool) []string {
 
 	// 4. ISO / CD-ROM & Boot Order
 	if paths.ISOPath != "" {
-		isoDrive := fmt.Sprintf("file=%s,media=cdrom", paths.ISOPath)
+		isoDrive := fmt.Sprintf("file=%s,media=cdrom,id=cdrom0", paths.ISOPath)
 		args = append(args, "-drive", isoDrive)
+	}
+
+	bootOrder := strings.TrimSpace(cfg.BootOrder)
+	if bootOrder != "" {
+		if !strings.Contains(bootOrder, "menu=") {
+			args = append(args, "-boot", fmt.Sprintf("order=%s,menu=on", bootOrder))
+		} else {
+			args = append(args, "-boot", bootOrder)
+		}
+	} else if paths.ISOPath != "" {
 		args = append(args, "-boot", "order=d,menu=on")
 	} else {
 		args = append(args, "-boot", "order=c")

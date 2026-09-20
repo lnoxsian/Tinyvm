@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 var (
 	ErrKVMDeviceNotFound = errors.New("/dev/kvm device does not exist")
 	ErrKVMPermission     = errors.New("insufficient permissions to access /dev/kvm (ensure user is in 'kvm' group)")
+
+	cpuSupportOnce   sync.Once
+	cachedCPUSupport bool
 )
 
 // KVMStatus holds detailed diagnosis about KVM capability on the host.
@@ -21,14 +25,17 @@ type KVMStatus struct {
 	Error          string `json:"error,omitempty"`
 }
 
-// CheckCPUSupport checks whether /proc/cpuinfo contains virtualization flags (vmx or svm).
+// CheckCPUSupport checks whether /proc/cpuinfo contains virtualization flags (vmx or svm), cached on initial query.
 func CheckCPUSupport() bool {
-	data, err := os.ReadFile("/proc/cpuinfo")
-	if err != nil {
-		return false
-	}
-	content := string(data)
-	return strings.Contains(content, "vmx") || strings.Contains(content, "svm")
+	cpuSupportOnce.Do(func() {
+		data, err := os.ReadFile("/proc/cpuinfo")
+		if err != nil {
+			return
+		}
+		content := string(data)
+		cachedCPUSupport = strings.Contains(content, "vmx") || strings.Contains(content, "svm")
+	})
+	return cachedCPUSupport
 }
 
 // CheckKVM verifies that /dev/kvm exists and is readable and writable.

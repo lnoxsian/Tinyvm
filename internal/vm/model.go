@@ -31,8 +31,18 @@ const (
 	StateStarting VMState = "starting"
 	StateRunning  VMState = "running"
 	StateStopping VMState = "stopping"
+	StatePaused   VMState = "paused"
 	StateError    VMState = "error"
 )
+
+// SnapshotInfo represents a saved VM snapshot.
+type SnapshotInfo struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	VMStateSize int64     `json:"vm_state_size"`
+	Date        time.Time `json:"date"`
+	Description string    `json:"description,omitempty"`
+}
 
 // VMRuntime tracks in-memory process information for a VM.
 type VMRuntime struct {
@@ -68,6 +78,8 @@ type VMConfig struct {
 	ISO        string        `json:"iso,omitempty"`
 	Firmware   string        `json:"firmware,omitempty"` // "bios" or "uefi"
 	OSType     string        `json:"os_type,omitempty"`  // e.g. "Linux", "Debian", "Ubuntu", "Windows"
+	BootOrder  string        `json:"boot_order,omitempty"` // e.g. "d" (CD first), "c" (Disk first), "dc"
+	Autostart  bool          `json:"autostart,omitempty"`
 	Network    NetworkConfig `json:"network"`
 }
 
@@ -176,6 +188,7 @@ func (c *VMConfig) ToQEMUConfig() *qemu.Config {
 		DiskFormat: c.DiskFormat,
 		ISO:        c.ISO,
 		Firmware:   c.Firmware,
+		BootOrder:  c.BootOrder,
 		Network: qemu.NetworkConfig{
 			Enabled: c.Network.Enabled,
 			Mode:    c.Network.Mode,

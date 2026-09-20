@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -613,6 +614,101 @@ func (s *Server) handleAPIVMQuit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAPIVMEjectISO handles POST /api/v1/vms/{id}/eject-iso, /vms/{id}/eject-iso, and /eject-iso
+func (s *Server) handleAPIVMEjectISO(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	if err := s.vmMgr.EjectISO(id); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		s.logger.Error("Failed to eject ISO from VM", "id", id, "err", err)
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
+		return
+	}
+
+	s.logger.Info("Ejected attached ISO from virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		if cardView, err := s.getSingleVMCardView(id); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("HX-Trigger", "vm-updated")
+			_ = s.templates["dashboard"].ExecuteTemplate(w, "vm-card", cardView)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, ActionResponse{
+		Message: "ISO ejected successfully",
+		ID:      id,
+		Status:  "ejected",
+	})
+}
+
+// handleAPIVMBoot handles POST /api/v1/vms/{id}/boot, /vms/{id}/boot, and /boot
+// It detaches the ISO if present and boots/restarts the machine into its installed OS.
+func (s *Server) handleAPIVMBoot(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	if err := s.vmMgr.BootVM(id); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		s.logger.Error("Failed to boot VM from disk", "id", id, "err", err)
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
+		return
+	}
+
+	s.logger.Info("Booted virtual machine from hard disk", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		if cardView, err := s.getSingleVMCardView(id); err == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("HX-Trigger", "vm-updated")
+			_ = s.templates["dashboard"].ExecuteTemplate(w, "vm-card", cardView)
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, ActionResponse{
+		Message: "VM booting from disk",
+		ID:      id,
+		Status:  "running",
+	})
+}
+
 // handleAPIVMStatus handles GET/POST /api/v1/vms/{id}/status and /status
 func (s *Server) handleAPIVMStatus(w http.ResponseWriter, r *http.Request) {
 	if s.vmMgr == nil {
@@ -784,5 +880,630 @@ func (s *Server) handleAPIISODelete(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": fmt.Sprintf("ISO '%s' deleted successfully", name),
+	})
+}
+
+// handleAPIVMAttachISO handles POST /api/v1/vms/{id}/attach-iso, /vms/{id}/attach-iso, /attach-iso
+func (s *Server) handleAPIVMAttachISO(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	iso := r.FormValue("iso")
+	if iso == "" && r.Body != nil {
+		var body struct {
+			ID  string `json:"id"`
+			ISO string `json:"iso"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if id == "" {
+			id = body.ID
+		}
+		if iso == "" {
+			iso = body.ISO
+		}
+	}
+
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	if err := s.vmMgr.AttachISO(id, iso); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		if errors.Is(err, storage.ErrISONotFound) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, "ISO not found in storage")
+			return
+		}
+		s.logger.Error("Failed to attach ISO to VM", "id", id, "iso", iso, "err", err)
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
+		return
+	}
+
+	s.logger.Info("Attached ISO to VM", "id", id, "iso", iso)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ActionResponse{
+		Message: "ISO attached successfully",
+		ID:      id,
+		Status:  "attached",
+	})
+}
+
+// handleAPIVMReset handles POST /api/v1/vms/{id}/reset, /vms/{id}/reset, /reset
+func (s *Server) handleAPIVMReset(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	if err := s.vmMgr.ResetVM(id); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		if errors.Is(err, vm.ErrVMNotRunning) {
+			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, "VM is not running")
+			return
+		}
+		s.logger.Error("Failed to reset VM", "id", id, "err", err)
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
+		return
+	}
+
+	s.logger.Info("Reset virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ActionResponse{
+		Message: "VM reset successfully",
+		ID:      id,
+		Status:  "running",
+	})
+}
+
+// handleAPIVMPause handles POST /api/v1/vms/{id}/pause, /vms/{id}/pause, /pause
+func (s *Server) handleAPIVMPause(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	if err := s.vmMgr.PauseVM(id); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		if errors.Is(err, vm.ErrVMNotRunning) {
+			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, "VM is not running")
+			return
+		}
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
+		return
+	}
+
+	s.logger.Info("Paused virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ActionResponse{
+		Message: "VM paused successfully",
+		ID:      id,
+		Status:  "paused",
+	})
+}
+
+// handleAPIVMResume handles POST /api/v1/vms/{id}/resume, /vms/{id}/resume, /resume
+func (s *Server) handleAPIVMResume(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	if id == "" && r.Body != nil {
+		var act VMActionRequest
+		_ = json.NewDecoder(r.Body).Decode(&act)
+		id = act.ID
+	}
+
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	if err := s.vmMgr.ResumeVM(id); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
+		return
+	}
+
+	s.logger.Info("Resumed virtual machine", "id", id)
+
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ActionResponse{
+		Message: "VM resumed successfully",
+		ID:      id,
+		Status:  "running",
+	})
+}
+
+// handleAPIVMUpdateConfig handles PUT /api/v1/vms/{id} and POST /vms/{id}/config
+func (s *Server) handleAPIVMUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	var update vm.VMConfig
+	contentType := r.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+			WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "invalid JSON payload: "+err.Error())
+			return
+		}
+	} else {
+		_ = r.ParseForm()
+		if name := r.FormValue("name"); name != "" {
+			update.Name = name
+		}
+		if cpusStr := r.FormValue("cpus"); cpusStr != "" {
+			if c, err := strconv.Atoi(cpusStr); err == nil {
+				update.CPUs = c
+			}
+		}
+		if memStr := r.FormValue("memory_mb"); memStr != "" {
+			if m, err := strconv.Atoi(memStr); err == nil {
+				update.MemoryMB = m
+			}
+		}
+		if fw := r.FormValue("firmware"); fw != "" {
+			update.Firmware = fw
+		}
+		if osType := r.FormValue("os_type"); osType != "" {
+			update.OSType = osType
+		}
+		if boot := r.FormValue("boot_order"); boot != "" {
+			update.BootOrder = boot
+		}
+		if autostartStr := r.FormValue("autostart"); autostartStr != "" {
+			update.Autostart = autostartStr == "true" || autostartStr == "1" || autostartStr == "on"
+		}
+		if sshStr := r.FormValue("ssh_port"); sshStr != "" {
+			if p, err := strconv.Atoi(sshStr); err == nil {
+				update.Network.SSHPort = p
+			}
+		}
+	}
+
+	if err := s.vmMgr.UpdateVMConfig(id, update); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
+		return
+	}
+
+	s.logger.Info("Updated VM configuration", "id", id)
+
+	if !strings.Contains(contentType, "application/json") && r.Header.Get("HX-Request") == "" {
+		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "VM configuration updated successfully",
+		"id":      id,
+	})
+}
+
+// handleAPIVMResizeDisk handles POST /api/v1/vms/{id}/resize-disk and /vms/{id}/resize-disk
+func (s *Server) handleAPIVMResizeDisk(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	size := r.FormValue("size")
+	if size == "" && r.Body != nil {
+		var req struct {
+			Size string `json:"size"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		size = req.Size
+	}
+
+	if id == "" || size == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "VM ID and size (e.g. +5G or 50G) are required")
+		return
+	}
+
+	if err := s.vmMgr.ResizeVMDisk(id, size); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
+		return
+	}
+
+	s.logger.Info("Resized VM disk", "id", id, "size", size)
+
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": fmt.Sprintf("VM disk resized by %s successfully", size),
+		"id":      id,
+	})
+}
+
+// handleAPIVMSnapshotsList handles GET /api/v1/vms/{id}/snapshots
+func (s *Server) handleAPIVMSnapshotsList(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	snaps, err := s.vmMgr.ListVMSnapshots(id)
+	if err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, snaps)
+}
+
+// handleAPIVMSnapshotCreate handles POST /api/v1/vms/{id}/snapshots and /vms/{id}/snapshots
+func (s *Server) handleAPIVMSnapshotCreate(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	name := r.FormValue("name")
+	desc := r.FormValue("description")
+	if name == "" && r.Body != nil {
+		var req struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		name = req.Name
+		desc = req.Description
+	}
+
+	if id == "" || name == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "VM ID and snapshot name are required")
+		return
+	}
+
+	if err := s.vmMgr.CreateVMSnapshot(id, name, desc); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
+		return
+	}
+
+	s.logger.Info("Created snapshot for VM", "id", id, "snapshot", name)
+
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message":  fmt.Sprintf("Snapshot '%s' created successfully", name),
+		"id":       id,
+		"snapshot": name,
+	})
+}
+
+// handleAPIVMSnapshotRollback handles POST /api/v1/vms/{id}/snapshots/{name}/rollback and /vms/{id}/snapshots/{name}/rollback
+func (s *Server) handleAPIVMSnapshotRollback(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	name := r.PathValue("name")
+	if name == "" {
+		name = r.FormValue("name")
+	}
+
+	if id == "" || name == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "VM ID and snapshot name are required")
+		return
+	}
+
+	if err := s.vmMgr.RollbackVMSnapshot(id, name); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
+		return
+	}
+
+	s.logger.Info("Rolled back VM to snapshot", "id", id, "snapshot", name)
+
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message":  fmt.Sprintf("Rolled back VM to snapshot '%s' successfully", name),
+		"id":       id,
+		"snapshot": name,
+	})
+}
+
+// handleAPIVMSnapshotDelete handles DELETE /api/v1/vms/{id}/snapshots/{name} and POST /vms/{id}/snapshots/{name}/delete
+func (s *Server) handleAPIVMSnapshotDelete(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	name := r.PathValue("name")
+	if name == "" {
+		name = r.FormValue("name")
+	}
+
+	if id == "" || name == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "VM ID and snapshot name are required")
+		return
+	}
+
+	if err := s.vmMgr.DeleteVMSnapshot(id, name); err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
+		return
+	}
+
+	s.logger.Info("Deleted snapshot from VM", "id", id, "snapshot", name)
+
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Trigger", "vm-updated")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message":  fmt.Sprintf("Snapshot '%s' deleted successfully", name),
+		"id":       id,
+		"snapshot": name,
+	})
+}
+
+// handleAPIVMClone handles POST /api/v1/vms/{id}/clone and /vms/{id}/clone
+func (s *Server) handleAPIVMClone(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "VM manager not initialized")
+		return
+	}
+
+	id := s.extractVMID(r)
+	newID := r.FormValue("new_id")
+	newName := r.FormValue("new_name")
+	if newID == "" && r.Body != nil {
+		var req struct {
+			NewID   string `json:"new_id"`
+			NewName string `json:"new_name"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		newID = req.NewID
+		newName = req.NewName
+	}
+
+	if id == "" || newID == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "source VM ID and new ID are required")
+		return
+	}
+
+	clonedVM, err := s.vmMgr.CloneVM(id, newID, newName)
+	if err != nil {
+		if errors.Is(err, vm.ErrVMNotFoundInMgr) {
+			WriteJSONError(w, http.StatusNotFound, ErrCodeNotFound, fmt.Sprintf("VM '%s' not found", id))
+			return
+		}
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, err.Error())
+		return
+	}
+
+	s.logger.Info("Cloned VM", "source_id", id, "new_id", newID)
+
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		http.Redirect(w, r, "/vms/"+newID, http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, toVMResponse(clonedVM))
+}
+
+// handleAPIVMLogs handles GET /api/v1/vms/{id}/logs and /vms/{id}/logs
+func (s *Server) handleAPIVMLogs(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil || s.vmMgr.Storage() == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "storage unavailable")
+		return
+	}
+
+	id := s.extractVMID(r)
+	if id == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "missing VM ID parameter")
+		return
+	}
+
+	vmDir, err := s.vmMgr.Storage().VMDir(id)
+	if err != nil {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "invalid VM ID")
+		return
+	}
+
+	logPath := filepath.Join(vmDir, "logs", "qemu.log")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte("No log output recorded yet.\n"))
+			return
+		}
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "failed to read log file")
+		return
+	}
+
+	// Limit to last 64KB
+	if len(data) > 65536 {
+		data = data[len(data)-65536:]
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+// handleAPIISODownload handles POST /api/v1/isos/download, /isos/download, and /storage/download
+func (s *Server) handleAPIISODownload(w http.ResponseWriter, r *http.Request) {
+	if s.vmMgr == nil || s.vmMgr.Storage() == nil {
+		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "storage unavailable")
+		return
+	}
+
+	urlStr := r.FormValue("url")
+	customName := r.FormValue("name")
+	if urlStr == "" && r.Body != nil {
+		var req struct {
+			URL  string `json:"url"`
+			Name string `json:"name"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		urlStr = req.URL
+		customName = req.Name
+	}
+
+	if urlStr == "" {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "ISO download URL is required")
+		return
+	}
+
+	info, err := s.vmMgr.Storage().DownloadISO(urlStr, customName)
+	if err != nil {
+		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "failed to download ISO: "+err.Error())
+		return
+	}
+
+	s.logger.Info("Downloaded ISO image", "name", info.Name, "url", urlStr)
+
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		http.Redirect(w, r, "/storage", http.StatusSeeOther)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, ISOResponse{
+		Name:      info.Name,
+		SizeBytes: info.SizeBytes,
 	})
 }
