@@ -191,6 +191,25 @@ func TestDiskResizeAndSnapshots(t *testing.T) {
 		t.Fatalf("expected 1 snapshot named 'snapshot-1', got %+v", snaps)
 	}
 
+	// 2b. Test snapshot operations blocked when VM is running
+	mgr.mu.Lock()
+	mgr.vms[cfg.ID].Runtime.State = StateRunning
+	mgr.mu.Unlock()
+
+	if err := mgr.CreateVMSnapshot(cfg.ID, "snap-running", ""); err == nil {
+		t.Errorf("expected error creating snapshot on running VM, got nil")
+	}
+	if err := mgr.RollbackVMSnapshot(cfg.ID, "snapshot-1"); err == nil {
+		t.Errorf("expected error rolling back snapshot on running VM, got nil")
+	}
+	if err := mgr.DeleteVMSnapshot(cfg.ID, "snapshot-1"); err == nil {
+		t.Errorf("expected error deleting snapshot on running VM, got nil")
+	}
+
+	mgr.mu.Lock()
+	mgr.vms[cfg.ID].Runtime.State = StateStopped
+	mgr.mu.Unlock()
+
 	// 3. Rollback snapshot
 	if err := mgr.RollbackVMSnapshot(cfg.ID, "snapshot-1"); err != nil {
 		t.Fatalf("failed to rollback snapshot: %v", err)

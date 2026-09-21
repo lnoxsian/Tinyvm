@@ -449,11 +449,19 @@
                         <circle cx="12" cy="13" r="4"></circle>
                     </svg>
                     <span>Snapshots ({{ len .Snapshots }})</span>
+                    {{ if eq .VM.Runtime.State "running" }}
+                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal; margin-left: 0.25rem;">(Stop VM to take or manage snapshots)</span>
+                    {{ end }}
                 </h3>
-                <form action="/vms/{{ .VM.Config.ID }}/snapshots" method="POST" style="display: inline-flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                    <input type="text" name="name" placeholder="Snapshot name (e.g. clean-install)" class="form-control" style="width: 200px; padding: 0.2rem 0.5rem; font-size: 0.8rem; border-radius: 0;" required pattern="[a-zA-Z0-9._-]+" title="Alphanumeric, ., _, -">
-                    <input type="text" name="description" placeholder="Description (optional)" class="form-control" style="width: 220px; padding: 0.2rem 0.5rem; font-size: 0.8rem; border-radius: 0;">
-                    <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 0;">Take Snapshot</button>
+                <form action="/vms/{{ .VM.Config.ID }}/snapshots"
+                      method="POST"
+                      hx-post="/vms/{{ .VM.Config.ID }}/snapshots"
+                      hx-swap="none"
+                      hx-on::after-request="if(event.detail.successful) { if(!window.location.hash) window.location.hash = '#options'; safeReload(300); }"
+                      style="display: inline-flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                    <input type="text" name="name" placeholder="Snapshot name (e.g. clean-install)" class="form-control" style="width: 200px; padding: 0.2rem 0.5rem; font-size: 0.8rem; border-radius: 0;" required pattern="[a-zA-Z0-9._-]+" title="Alphanumeric, ., _, -" {{ if eq .VM.Runtime.State "running" }}disabled{{ end }}>
+                    <input type="text" name="description" placeholder="Description (optional)" class="form-control" style="width: 220px; padding: 0.2rem 0.5rem; font-size: 0.8rem; border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled{{ end }}>
+                    <button type="submit" class="btn btn-primary btn-sm" style="border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM before taking snapshot"{{ end }}>Take Snapshot</button>
                 </form>
             </div>
             {{ if .Snapshots }}
@@ -477,8 +485,9 @@
                                     hx-post="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/rollback"
                                     hx-confirm="Rollback VM disk to snapshot '{{ .Name }}'? Any unsaved changes will be lost."
                                     hx-swap="none"
-                                    hx-on::after-request="if(event.detail.successful) safeReload(300)"
-                                    title="Rollback to snapshot '{{ .Name }}'"
+                                    hx-on::after-request="if(event.detail.successful) { if(!window.location.hash) window.location.hash = '#options'; safeReload(300); }"
+                                    title="{{ if eq $.VM.Runtime.State "running" }}Stop VM before rolling back{{ else }}Rollback to snapshot '{{ .Name }}'{{ end }}"
+                                    {{ if eq $.VM.Runtime.State "running" }}disabled{{ end }}
                                     aria-label="Rollback">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polyline points="1 4 1 10 7 10"></polyline>
@@ -489,9 +498,10 @@
                                     hx-post="/vms/{{ $.VM.Config.ID }}/snapshots/{{ .Name }}/delete"
                                     hx-confirm="Permanently delete snapshot '{{ .Name }}'?"
                                     hx-swap="none"
-                                    hx-on::after-request="if(event.detail.successful) safeReload(300)"
+                                    hx-on::after-request="if(event.detail.successful) { if(!window.location.hash) window.location.hash = '#options'; safeReload(300); }"
                                     style="margin-left: 0.35rem;"
-                                    title="Delete snapshot '{{ .Name }}'"
+                                    title="{{ if eq $.VM.Runtime.State "running" }}Stop VM before deleting snapshot{{ else }}Delete snapshot '{{ .Name }}'{{ end }}"
+                                    {{ if eq $.VM.Runtime.State "running" }}disabled{{ end }}
                                     aria-label="Delete">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <polyline points="3 6 5 6 21 6"></polyline>

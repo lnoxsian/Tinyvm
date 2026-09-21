@@ -1218,7 +1218,7 @@ func (s *Server) handleAPIVMResizeDisk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		http.Redirect(w, r, "/vms/"+id+"#options", http.StatusSeeOther)
 		return
 	}
 
@@ -1296,7 +1296,7 @@ func (s *Server) handleAPIVMSnapshotCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		http.Redirect(w, r, "/vms/"+id+"#options", http.StatusSeeOther)
 		return
 	}
 
@@ -1342,7 +1342,7 @@ func (s *Server) handleAPIVMSnapshotRollback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		http.Redirect(w, r, "/vms/"+id+"#options", http.StatusSeeOther)
 		return
 	}
 
@@ -1388,7 +1388,7 @@ func (s *Server) handleAPIVMSnapshotDelete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		http.Redirect(w, r, "/vms/"+id, http.StatusSeeOther)
+		http.Redirect(w, r, "/vms/"+id+"#options", http.StatusSeeOther)
 		return
 	}
 

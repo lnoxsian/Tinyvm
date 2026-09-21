@@ -826,6 +826,10 @@ func (m *Manager) CreateVMSnapshot(id string, name string, desc string) error {
 		m.mu.RUnlock()
 		return ErrVMNotFoundInMgr
 	}
+	if v.Runtime.State == StateRunning || v.Runtime.State == StateStarting {
+		m.mu.RUnlock()
+		return fmt.Errorf("cannot create snapshot while VM is running (stop VM first)")
+	}
 	diskName := v.Config.Disk
 	if diskName == "" {
 		diskName = "disk.qcow2"
@@ -920,6 +924,10 @@ func (m *Manager) DeleteVMSnapshot(id string, name string) error {
 	if !exists {
 		m.mu.RUnlock()
 		return ErrVMNotFoundInMgr
+	}
+	if v.Runtime.State == StateRunning || v.Runtime.State == StateStarting {
+		m.mu.RUnlock()
+		return fmt.Errorf("cannot delete snapshot while VM is running (stop VM first)")
 	}
 	diskName := v.Config.Disk
 	if diskName == "" {
