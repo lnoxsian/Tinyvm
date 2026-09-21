@@ -832,7 +832,7 @@ function renderVMTelemetryCharts(pushPoint = true) {
         }
 
         const width = Math.floor((rect && rect.width > 0) ? rect.width : (wrapW > 0 ? wrapW : 340));
-        const height = Math.floor((rect && rect.height > 0) ? rect.height : (wrapH > 0 ? wrapH : 52));
+        const height = Math.floor((rect && rect.height > 0) ? rect.height : (wrapH > 0 ? wrapH : 68));
         const dpr = window.devicePixelRatio || 1;
 
         const targetW = Math.max(50, width);

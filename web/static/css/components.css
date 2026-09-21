@@ -1545,7 +1545,7 @@ select.form-control {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.65rem 1.25rem;
+    padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--border);
     font-size: 0.85rem;
 }
@@ -1564,7 +1564,7 @@ select.form-control {
 .telemetry-metric-item {
     display: flex;
     flex-direction: column;
-    padding: 0.65rem 1.25rem;
+    padding: 0.45rem 1rem;
     border-bottom: 1px solid var(--border);
     flex: 1;
     justify-content: center;
@@ -1578,19 +1578,20 @@ select.form-control {
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--text-muted);
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.25rem;
 }
 
 .telemetry-metric-content {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
 }
 
 .telemetry-spark-canvas-wrap {
     flex: 1;
     min-width: 0;
-    height: 52px;
+    height: 68px;
+    min-height: 64px;
     background-color: #090d13;
     border: 1px solid var(--border);
     border-radius: 0;
@@ -1608,7 +1609,7 @@ select.form-control {
     font-family: var(--font-mono);
     font-size: 0.88rem;
     font-weight: 600;
-    min-width: 140px;
+    min-width: 125px;
     text-align: right;
     white-space: nowrap;
 }

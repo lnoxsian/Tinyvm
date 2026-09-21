@@ -18,19 +18,13 @@
     {{ $diskPct := calcPercent .DiskActualBytes .DiskVirtualBytes }}
 
     <div class="telemetry-compact-body">
-        <!-- 1. Process PID -->
-        <div class="telemetry-info-row">
-            <span class="telemetry-info-label">Process PID</span>
-            <span class="telemetry-info-val">{{ if eq .Status "running" }}{{ .PID }}{{ else }}—{{ end }}</span>
-        </div>
-
-        <!-- 2. Uptime -->
+        <!-- 1. Uptime -->
         <div class="telemetry-info-row">
             <span class="telemetry-info-label">Uptime:</span>
             <span class="telemetry-info-val">{{ if eq .Status "running" }}{{ if .Uptime }}{{ .Uptime }}{{ else }}< 1s{{ end }}{{ else }}Stopped{{ end }}</span>
         </div>
 
-        <!-- 3. CPU Usage -->
+        <!-- 2. CPU Usage -->
         <div class="telemetry-metric-item">
             <div class="telemetry-metric-title">CPU Usage</div>
             <div class="telemetry-metric-content">
@@ -41,7 +35,7 @@
                             data-metric="cpu" 
                             data-value="{{ $cpuVal }}" 
                             data-status="{{ .Status }}" 
-                            width="340" height="52"></canvas>
+                            width="340" height="68"></canvas>
                 </div>
                 <div class="telemetry-metric-stat" style="color: #58a6ff;">
                     {{ printf "%.1f" $cpuVal }}%
@@ -49,7 +43,7 @@
             </div>
         </div>
 
-        <!-- 4. RAM RSS -->
+        <!-- 3. RAM RSS -->
         <div class="telemetry-metric-item">
             <div class="telemetry-metric-title">RAM RSS</div>
             <div class="telemetry-metric-content">
@@ -60,7 +54,7 @@
                             data-metric="ram" 
                             data-value="{{ $memPct }}" 
                             data-status="{{ .Status }}" 
-                            width="340" height="52"></canvas>
+                            width="340" height="68"></canvas>
                 </div>
                 <div class="telemetry-metric-stat" style="color: #3fb950;">
                     {{ if eq .Status "running" }}{{ .MemoryRSSMB }}{{ else }}0{{ end }} MB / {{ .MemoryConfigMB }} MB
@@ -68,7 +62,7 @@
             </div>
         </div>
 
-        <!-- 5. Storage Allocated -->
+        <!-- 4. Storage Allocated -->
         <div class="telemetry-metric-item">
             <div class="telemetry-metric-title">Storage Allocated</div>
             <div class="telemetry-metric-content">
@@ -79,7 +73,7 @@
                             data-metric="storage" 
                             data-value="{{ $diskPct }}" 
                             data-status="{{ .Status }}" 
-                            width="340" height="52"></canvas>
+                            width="340" height="68"></canvas>
                 </div>
                 <div class="telemetry-metric-stat" style="color: #d29922;">
                     {{ formatBytes .DiskActualBytes }}

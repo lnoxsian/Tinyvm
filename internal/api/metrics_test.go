@@ -180,6 +180,9 @@ func TestMetrics_HTMXPartialAndDetailPage(t *testing.T) {
 	if !strings.Contains(body, "CPU Usage") || !strings.Contains(body, "RAM RSS") {
 		t.Errorf("expected partial to show CPU and RAM metrics")
 	}
+	if strings.Contains(body, "Process PID") {
+		t.Errorf("expected partial to NOT contain 'Process PID'")
+	}
 
 	// 2. Partial for non-existent VM -> 404
 	badReq := httptest.NewRequest(http.MethodGet, "/partials/vms/unknown-ghost/metrics", nil)
