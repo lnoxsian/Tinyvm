@@ -516,8 +516,8 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 		if vmDir, err := s.vmMgr.Storage().VMDir(id); err == nil {
 			logPath := filepath.Join(vmDir, "logs", "qemu.log")
 			if data, err := os.ReadFile(logPath); err == nil {
-				if len(data) > 8192 {
-					qemuLog = string(data[len(data)-8192:])
+				if len(data) > 65536 {
+					qemuLog = string(data[len(data)-65536:])
 				} else {
 					qemuLog = string(data)
 				}

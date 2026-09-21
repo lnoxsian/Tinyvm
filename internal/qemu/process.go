@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -55,16 +56,45 @@ func CleanStaleArtifacts(paths QEMUPaths) {
 func StartProcess(binary string, args []string, paths QEMUPaths, vmID string) (*Process, error) {
 	CleanStaleArtifacts(paths)
 
-	logsDir := filepath.Join(paths.VMDir, "logs")
+	logPath := paths.LogFile
+	if logPath == "" && paths.VMDir != "" {
+		logPath = filepath.Join(paths.VMDir, "logs", "qemu.log")
+	}
+	if logPath == "" {
+		return nil, fmt.Errorf("no log path or VM directory configured")
+	}
+
+	logsDir := filepath.Dir(logPath)
 	if err := os.MkdirAll(logsDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create logs directory: %w", err)
 	}
 
-	logPath := filepath.Join(logsDir, "qemu.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open QEMU log file: %w", err)
 	}
+
+	now := time.Now().Format("2006-01-02 15:04:05")
+	var formattedArgs strings.Builder
+	for i, arg := range args {
+		if i > 0 {
+			formattedArgs.WriteString(" \\\n    ")
+		}
+		if strings.ContainsAny(arg, " \t\n") {
+			formattedArgs.WriteString(fmt.Sprintf("%q", arg))
+		} else {
+			formattedArgs.WriteString(arg)
+		}
+	}
+
+	banner := fmt.Sprintf("\n================================================================================\n"+
+		"[%s] [LAUNCH] Starting Virtual Machine: %s\n"+
+		"Binary: %s\n"+
+		"Command:\n  %s \\\n    %s\n"+
+		"================================================================================\n",
+		now, vmID, binary, binary, formattedArgs.String())
+	_, _ = logFile.WriteString(banner)
+	_ = logFile.Sync()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, binary, args...)
@@ -76,11 +106,17 @@ func StartProcess(binary string, args []string, paths QEMUPaths, vmID string) (*
 
 	if err := cmd.Start(); err != nil {
 		cancel()
+		errTime := time.Now().Format("2006-01-02 15:04:05")
+		_, _ = fmt.Fprintf(logFile, "[%s] [ERROR] Failed to start QEMU: %v\n================================================================================\n", errTime, err)
+		_ = logFile.Sync()
 		_ = logFile.Close()
 		return nil, fmt.Errorf("failed to start QEMU: %w", err)
 	}
 
 	pid := cmd.Process.Pid
+	_, _ = fmt.Fprintf(logFile, "[%s] [RUNNING] Process started successfully with PID %d\n", time.Now().Format("2006-01-02 15:04:05"), pid)
+	_ = logFile.Sync()
+
 	// Write PID file
 	_ = os.WriteFile(paths.PIDFile, []byte(fmt.Sprintf("%d\n", pid)), 0640)
 
@@ -122,12 +158,22 @@ func (p *Process) monitor() {
 	p.exitError = waitErr
 	p.mu.Unlock()
 
-	// Clean sockets and PID file on termination
-	CleanStaleArtifacts(p.paths)
-
+	// Write termination record to log before closing
 	if p.logFile != nil {
+		timestamp := time.Now().Format("2006-01-02 15:04:05")
+		if waitErr != nil {
+			_, _ = fmt.Fprintf(p.logFile, "\n[%s] [TERMINATED] Process %d exited with code %d: %v\n================================================================================\n",
+				timestamp, p.pid, exitCode, waitErr)
+		} else {
+			_, _ = fmt.Fprintf(p.logFile, "\n[%s] [TERMINATED] Process %d exited normally (exit code 0)\n================================================================================\n",
+				timestamp, p.pid)
+		}
+		_ = p.logFile.Sync()
 		_ = p.logFile.Close()
 	}
+
+	// Clean sockets and PID file on termination
+	CleanStaleArtifacts(p.paths)
 
 	p.cancelFn()
 

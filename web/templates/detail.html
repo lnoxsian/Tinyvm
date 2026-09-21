@@ -194,9 +194,9 @@
     </div>
 
     <!-- QEMU Subprocess Logs -->
-    <div style="margin-top: 1.25rem;">
+    <div style="margin-top: 1.25rem;" id="qemu-log-card-section">
         <div class="card vm-details-card">
-            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;" onclick="toggleLogsCard('{{ .VM.Config.ID }}', event)">
                 <h3 class="card-title" style="display: flex; align-items: center; gap: 0.5rem; margin: 0;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -206,11 +206,32 @@
                         <polyline points="10 9 9 9 8 9"></polyline>
                     </svg>
                     <span>QEMU Subprocess Logs</span>
+                    <span class="badge badge-subtle" id="logs-visibility-badge" style="font-size: 0.72rem; margin-left: 0.25rem;">Hidden</span>
+                    <svg id="logs-chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.2s ease; margin-left: 0.25rem; color: var(--text-muted);">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
                 </h3>
-                <button type="button" class="btn btn-sm btn-outline" style="border-radius: 0;" onclick="location.reload()">Refresh Log</button>
+                <div style="display: flex; gap: 0.75rem; align-items: center;" onclick="event.stopPropagation()">
+                    <!-- Toggle Switch to Enable/Disable Viewing Logs -->
+                    <div style="display: inline-flex; align-items: center; gap: 0.45rem;">
+                        <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted);" id="logs-toggle-label">See Logs</span>
+                        <label class="toggle-switch" style="vertical-align: middle; margin: 0;">
+                            <input type="checkbox" id="vm-logs-toggle" onchange="toggleLogsVisibility('{{ .VM.Config.ID }}', this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <!-- Controls visible only when logs are enabled -->
+                    <div id="logs-active-controls" style="display: none; align-items: center; gap: 0.5rem; border-left: 1px solid var(--border); padding-left: 0.75rem;">
+                        <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--text-muted); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="auto-refresh-logs" onchange="toggleAutoRefreshLogs('{{ .VM.Config.ID }}', this.checked)">
+                            Auto-refresh (3s)
+                        </label>
+                        <button type="button" class="btn btn-sm btn-outline" id="refresh-logs-btn" style="border-radius: 0;" onclick="refreshVMLogs('{{ .VM.Config.ID }}')">Refresh Log</button>
+                    </div>
+                </div>
             </div>
-            <div style="padding: 1rem 1.25rem;">
-                <pre class="log-viewer" style="border-radius: 0; margin: 0; max-height: 420px;">{{ if .QEMULog }}{{ .QEMULog }}{{ else }}No log entries recorded yet.{{ end }}</pre>
+            <div id="qemu-log-body" style="display: none; padding: 1rem 1.25rem;">
+                <pre class="log-viewer" id="qemu-log-viewer" style="border-radius: 0; margin: 0; max-height: 420px; overflow-y: auto;">{{ if .QEMULog }}{{ .QEMULog }}{{ else }}No log entries recorded yet.{{ end }}</pre>
             </div>
         </div>
     </div>
@@ -649,7 +670,16 @@ window.setAutostart = function(enabled) {
     window.addEventListener('hashchange', () => {
         let h = window.location.hash.replace('#', '');
         if (h === 'hardware' || h === 'snapshots') h = 'options';
-        if (h === 'logs') h = 'summary';
+        if (h === 'logs') {
+            h = 'summary';
+            if (typeof toggleLogsVisibility === 'function') {
+                toggleLogsVisibility('{{ .VM.Config.ID }}', true);
+            }
+            setTimeout(() => {
+                const card = document.getElementById('qemu-log-card-section');
+                if (card) card.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        }
         if (h && document.getElementById('tab-' + h)) {
             selectTab(h);
         }
@@ -662,9 +692,8 @@ window.setAutostart = function(enabled) {
         selectTab(currentHash);
     }
 
-    const logViewer = document.querySelector('.log-viewer');
-    if (logViewer) {
-        logViewer.scrollTop = logViewer.scrollHeight;
+    if (typeof initLogsToggle === 'function') {
+        initLogsToggle('{{ .VM.Config.ID }}');
     }
 })();
 </script>

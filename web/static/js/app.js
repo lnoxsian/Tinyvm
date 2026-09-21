@@ -1322,6 +1322,143 @@ function formatBytesJS(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+// ==========================================
+// QEMU VM Logs Viewer, Visibility Toggle & Auto-Refresh
+// ==========================================
+let autoRefreshLogsTimer = null;
 
+function toggleLogsVisibility(vmId, isVisible) {
+    const toggle = document.getElementById('vm-logs-toggle');
+    const body = document.getElementById('qemu-log-body');
+    const controls = document.getElementById('logs-active-controls');
+    const badge = document.getElementById('logs-visibility-badge');
+    const chevron = document.getElementById('logs-chevron-icon');
+    const label = document.getElementById('logs-toggle-label');
 
+    if (!body) return;
 
+    if (toggle && toggle.checked !== isVisible) {
+        toggle.checked = isVisible;
+    }
+
+    if (isVisible) {
+        body.style.display = 'block';
+        if (controls) controls.style.display = 'inline-flex';
+        if (badge) {
+            badge.textContent = 'Visible';
+            badge.className = 'badge running';
+        }
+        if (chevron) {
+            chevron.style.transform = 'rotate(180deg)';
+        }
+        if (label) {
+            label.textContent = 'Logs: On';
+            label.style.color = 'var(--text)';
+        }
+        localStorage.setItem('tinyvm_logs_visible', 'true');
+
+        // Fetch fresh logs and scroll to bottom
+        refreshVMLogs(vmId);
+    } else {
+        body.style.display = 'none';
+        if (controls) controls.style.display = 'none';
+        if (badge) {
+            badge.textContent = 'Hidden';
+            badge.className = 'badge badge-subtle';
+        }
+        if (chevron) {
+            chevron.style.transform = 'rotate(0deg)';
+        }
+        if (label) {
+            label.textContent = 'See Logs';
+            label.style.color = 'var(--text-muted)';
+        }
+        localStorage.setItem('tinyvm_logs_visible', 'false');
+
+        // Stop auto-refresh if active
+        const autoRefreshCheckbox = document.getElementById('auto-refresh-logs');
+        if (autoRefreshCheckbox) autoRefreshCheckbox.checked = false;
+        if (autoRefreshLogsTimer) {
+            clearInterval(autoRefreshLogsTimer);
+            autoRefreshLogsTimer = null;
+        }
+    }
+}
+
+function toggleLogsCard(vmId, event) {
+    if (event && event.target && (event.target.closest('label') || event.target.closest('button') || event.target.closest('input'))) {
+        return;
+    }
+    const toggle = document.getElementById('vm-logs-toggle');
+    const currentState = toggle ? toggle.checked : false;
+    toggleLogsVisibility(vmId, !currentState);
+}
+
+function initLogsToggle(vmId) {
+    const toggle = document.getElementById('vm-logs-toggle');
+    if (!toggle) return;
+
+    const savedPref = localStorage.getItem('tinyvm_logs_visible');
+    const hash = window.location.hash.replace('#', '');
+    const shouldShow = (hash === 'logs') || (savedPref === 'true');
+
+    toggleLogsVisibility(vmId, shouldShow);
+
+    if (hash === 'logs') {
+        setTimeout(() => {
+            const card = document.getElementById('qemu-log-card-section');
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth' });
+            }
+        }, 100);
+    }
+}
+
+function refreshVMLogs(vmId) {
+    const btn = document.getElementById('refresh-logs-btn');
+    const viewer = document.getElementById('qemu-log-viewer');
+    if (!viewer) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Refreshing...';
+    }
+
+    fetch(`/api/v1/vms/${encodeURIComponent(vmId)}/logs`)
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.text();
+        })
+        .then(text => {
+            const wasAtBottom = (viewer.scrollHeight - viewer.clientHeight - viewer.scrollTop) <= 40;
+            viewer.textContent = text || 'No log entries recorded yet.';
+            if (wasAtBottom) {
+                viewer.scrollTop = viewer.scrollHeight;
+            }
+        })
+        .catch(err => {
+            console.error('Error refreshing VM logs:', err);
+        })
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Refresh Log';
+            }
+        });
+}
+
+function toggleAutoRefreshLogs(vmId, enabled) {
+    if (autoRefreshLogsTimer) {
+        clearInterval(autoRefreshLogsTimer);
+        autoRefreshLogsTimer = null;
+    }
+    if (enabled) {
+        refreshVMLogs(vmId);
+        autoRefreshLogsTimer = setInterval(() => {
+            const tabSummary = document.getElementById('tab-summary');
+            if (!tabSummary || tabSummary.classList.contains('active')) {
+                refreshVMLogs(vmId);
+            }
+        }, 3000);
+    }
+}

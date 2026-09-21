@@ -53,6 +53,7 @@ type QEMUPaths struct {
 	ConsoleSock string
 	VNCSock     string
 	PIDFile     string
+	LogFile     string
 }
 
 // BuildPaths derives standard socket and file paths for a given VM.
@@ -77,6 +78,7 @@ func BuildPaths(vmDir string, isoDir string, cfg *Config) QEMUPaths {
 		ConsoleSock: filepath.Join(vmDir, "console.sock"),
 		VNCSock:     filepath.Join(vmDir, "vnc.sock"),
 		PIDFile:     filepath.Join(vmDir, "qemu.pid"),
+		LogFile:     filepath.Join(vmDir, "logs", "qemu.log"),
 	}
 }
 
@@ -233,7 +235,21 @@ func BuildArgs(cfg *Config, paths QEMUPaths, useKVM bool) []string {
 		args = append(args, "-display", "none")
 	}
 
-	// 10. PID File
+	// 10. Logging & Diagnostic Output
+	args = append(args, "-msg", "timestamp=on", "-d", "guest_errors")
+
+	logPath := paths.LogFile
+	if logPath == "" && paths.VMDir != "" {
+		logPath = filepath.Join(paths.VMDir, "logs", "qemu.log")
+	}
+	if logPath != "" {
+		args = append(args,
+			"-chardev", fmt.Sprintf("file,id=firmwarelog,path=%s,append=on", logPath),
+			"-device", "isa-debugcon,iobase=0x402,chardev=firmwarelog",
+		)
+	}
+
+	// 11. PID File
 	args = append(args, "-pidfile", paths.PIDFile)
 
 	return args

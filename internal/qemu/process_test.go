@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -77,5 +78,22 @@ func TestStartAndStopQEMUProcess(t *testing.T) {
 	// Verify cleanup
 	if _, err := os.Stat(paths.PIDFile); err == nil {
 		t.Errorf("expected PID file to be cleaned up after exit")
+	}
+
+	// Verify log file was written with lifecycle banners and diagnostic output
+	logBytes, err := os.ReadFile(filepath.Join(tmpDir, "logs", "qemu.log"))
+	if err != nil {
+		t.Errorf("expected log file to exist: %v", err)
+	} else {
+		logContent := string(logBytes)
+		if !strings.Contains(logContent, "[LAUNCH]") {
+			t.Errorf("expected [LAUNCH] banner in log, got:\n%s", logContent)
+		}
+		if !strings.Contains(logContent, "[RUNNING]") {
+			t.Errorf("expected [RUNNING] banner in log, got:\n%s", logContent)
+		}
+		if !strings.Contains(logContent, "[TERMINATED]") {
+			t.Errorf("expected [TERMINATED] banner in log, got:\n%s", logContent)
+		}
 	}
 }

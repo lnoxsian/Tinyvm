@@ -329,3 +329,49 @@ func TestBuildArgs_32Bit_CustomOverrides(t *testing.T) {
 		t.Errorf("expected overridden -vga virtio, got %s", vga)
 	}
 }
+
+func TestBuildArgs_LoggingFlags(t *testing.T) {
+	cfg := &Config{
+		ID:       "logging-vm",
+		CPUs:     1,
+		MemoryMB: 512,
+	}
+
+	paths := BuildPaths("/tmp/vms/logging-vm", "/tmp/iso", cfg)
+	if paths.LogFile != "/tmp/vms/logging-vm/logs/qemu.log" {
+		t.Errorf("expected LogFile path to be /tmp/vms/logging-vm/logs/qemu.log, got %s", paths.LogFile)
+	}
+
+	args := BuildArgs(cfg, paths, false)
+
+	// Check diagnostic flags
+	msg, ok := findArg(args, "-msg")
+	if !ok || msg != "timestamp=on" {
+		t.Errorf("expected -msg timestamp=on, got %s (ok: %v)", msg, ok)
+	}
+
+	d, ok := findArg(args, "-d")
+	if !ok || d != "guest_errors" {
+		t.Errorf("expected -d guest_errors, got %s (ok: %v)", d, ok)
+	}
+
+	// Check firmware log chardev and debugcon
+	chardev, ok := findArg(args, "-chardev")
+	if !ok || !strings.Contains(chardev, "file,id=firmwarelog") || !strings.Contains(chardev, "path=/tmp/vms/logging-vm/logs/qemu.log") {
+		t.Errorf("expected firmwarelog chardev with path, got %s", chardev)
+	}
+
+	deviceFound := false
+	for i, arg := range args {
+		if arg == "-device" && i+1 < len(args) && strings.Contains(args[i+1], "isa-debugcon") {
+			deviceFound = true
+			if !strings.Contains(args[i+1], "iobase=0x402") || !strings.Contains(args[i+1], "chardev=firmwarelog") {
+				t.Errorf("expected isa-debugcon with iobase=0x402 and chardev=firmwarelog, got %s", args[i+1])
+			}
+			break
+		}
+	}
+	if !deviceFound {
+		t.Errorf("expected isa-debugcon device in args, got: %v", args)
+	}
+}
