@@ -11,6 +11,8 @@
 
     {{ $cpuVal := 0.0 }}
     {{ if eq .Status "running" }}{{ $cpuVal = .CPUPercent }}{{ end }}
+    {{ if gt $cpuVal 100.0 }}{{ $cpuVal = 100.0 }}{{ end }}
+    {{ if lt $cpuVal 0.0 }}{{ $cpuVal = 0.0 }}{{ end }}
     {{ $memPct := 0 }}
     {{ if and (eq .Status "running") (gt .MemoryConfigMB 0) }}
         {{ $memPct = calcPercent .MemoryRSSMB .MemoryConfigMB }}

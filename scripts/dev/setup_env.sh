@@ -98,7 +98,8 @@ elif command -v dnf >/dev/null 2>&1; then
 elif command -v pacman >/dev/null 2>&1; then
     log_info "Using pacman to install QEMU packages..."
     run_as_root pacman -Sy --noconfirm \
-        qemu-base \
+        qemu-system-x86 \
+        qemu-img \
         edk2-ovmf
 else
     log_error "Unsupported package manager. Please manually install qemu-system-x86 and qemu-utils."
@@ -140,6 +141,13 @@ if command -v qemu-system-x86_64 >/dev/null 2>&1; then
     log_success "qemu-system-x86_64: ${QEMU_SYS_VER}"
 else
     log_error "qemu-system-x86_64 not found in PATH."
+fi
+
+if command -v qemu-system-i386 >/dev/null 2>&1; then
+    QEMU_I386_VER=$(qemu-system-i386 --version | head -n 1)
+    log_success "qemu-system-i386 (32-bit): ${QEMU_I386_VER}"
+else
+    log_warn "qemu-system-i386 (32-bit) not found in PATH."
 fi
 
 echo ""

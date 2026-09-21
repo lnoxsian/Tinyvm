@@ -355,3 +355,114 @@ func TestCreateAndStartVM_UEFI(t *testing.T) {
 	}
 }
 
+func TestValidate_ArchAndDeviceProfiles(t *testing.T) {
+	valid64 := VMConfig{
+		ID:       "valid-64",
+		Name:     "Valid 64-bit",
+		Arch:     "x86_64",
+		CPUs:     2,
+		MemoryMB: 1024,
+		Firmware: "bios",
+	}
+	if err := valid64.Validate(); err != nil {
+		t.Errorf("expected valid 64-bit VM config, got %v", err)
+	}
+
+	valid32 := VMConfig{
+		ID:       "valid-32",
+		Name:     "Valid 32-bit",
+		Arch:     "x86",
+		CPUs:     1,
+		MemoryMB: 1024,
+		Firmware: "bios",
+		DiskBus:  "ide",
+		VGAModel: "std",
+		NetModel: "e1000",
+		Machine:  "pc",
+	}
+	if err := valid32.Validate(); err != nil {
+		t.Errorf("expected valid 32-bit VM config, got %v", err)
+	}
+
+	validI386 := VMConfig{
+		ID:       "valid-i386",
+		Name:     "Valid i386",
+		Arch:     "i386",
+		CPUs:     1,
+		MemoryMB: 512,
+	}
+	if err := validI386.Validate(); err != nil {
+		t.Errorf("expected valid i386 VM config, got %v", err)
+	}
+
+	// 32-bit with UEFI should be rejected
+	invalid32UEFI := VMConfig{
+		ID:       "invalid-32-uefi",
+		Name:     "Invalid 32 UEFI",
+		Arch:     "x86",
+		CPUs:     1,
+		MemoryMB: 512,
+		Firmware: "uefi",
+	}
+	if err := invalid32UEFI.Validate(); err == nil {
+		t.Errorf("expected error for 32-bit VM with UEFI firmware, got nil")
+	}
+
+	// Invalid arch
+	invalidArch := VMConfig{
+		ID:       "invalid-arch",
+		Name:     "Invalid Arch",
+		Arch:     "mips",
+		CPUs:     1,
+		MemoryMB: 512,
+	}
+	if err := invalidArch.Validate(); err == nil {
+		t.Errorf("expected error for unsupported architecture, got nil")
+	}
+
+	// Invalid disk bus
+	invalidBus := VMConfig{
+		ID:       "invalid-bus",
+		Name:     "Invalid Bus",
+		Arch:     "x86",
+		DiskBus:  "nvme-invalid",
+		CPUs:     1,
+		MemoryMB: 512,
+	}
+	if err := invalidBus.Validate(); err == nil {
+		t.Errorf("expected error for invalid disk bus, got nil")
+	}
+}
+
+func TestVMConfig_32Bit_ToQEMUConfig(t *testing.T) {
+	cfg := VMConfig{
+		ID:       "winxp-qemu-cfg",
+		Name:     "Windows XP 32",
+		Arch:     "x86",
+		Machine:  "pc",
+		DiskBus:  "ide",
+		VGAModel: "std",
+		NetModel: "e1000",
+		CPUs:     2,
+		MemoryMB: 1024,
+		Firmware: "bios",
+	}
+
+	qcfg := cfg.ToQEMUConfig()
+	if qcfg.Arch != "x86" {
+		t.Errorf("expected Arch 'x86', got '%s'", qcfg.Arch)
+	}
+	if qcfg.Machine != "pc" {
+		t.Errorf("expected Machine 'pc', got '%s'", qcfg.Machine)
+	}
+	if qcfg.DiskBus != "ide" {
+		t.Errorf("expected DiskBus 'ide', got '%s'", qcfg.DiskBus)
+	}
+	if qcfg.VGAModel != "std" {
+		t.Errorf("expected VGAModel 'std', got '%s'", qcfg.VGAModel)
+	}
+	if qcfg.NetModel != "e1000" {
+		t.Errorf("expected NetModel 'e1000', got '%s'", qcfg.NetModel)
+	}
+}
+

@@ -21,6 +21,11 @@ import (
 type CreateVMRequest struct {
 	ID         string           `json:"id"`
 	Name       string           `json:"name"`
+	Arch       string           `json:"arch,omitempty"`
+	Machine    string           `json:"machine,omitempty"`
+	DiskBus    string           `json:"disk_bus,omitempty"`
+	VGAModel   string           `json:"vga_model,omitempty"`
+	NetModel   string           `json:"net_model,omitempty"`
 	OSType     string           `json:"os_type,omitempty"`
 	OS         string           `json:"os,omitempty"`
 	CPUs       int              `json:"cpus"`
@@ -45,6 +50,11 @@ type VMActionRequest struct {
 type VMResponse struct {
 	ID         string           `json:"id"`
 	Name       string           `json:"name"`
+	Arch       string           `json:"arch,omitempty"`
+	Machine    string           `json:"machine,omitempty"`
+	DiskBus    string           `json:"disk_bus,omitempty"`
+	VGAModel   string           `json:"vga_model,omitempty"`
+	NetModel   string           `json:"net_model,omitempty"`
 	OSType     string           `json:"os_type,omitempty"`
 	Status     string           `json:"status"`
 	CPUs       int              `json:"cpus"`
@@ -76,6 +86,11 @@ func toVMResponse(v *vm.VM) VMResponse {
 	resp := VMResponse{
 		ID:         v.Config.ID,
 		Name:       v.Config.Name,
+		Arch:       v.Config.Arch,
+		Machine:    v.Config.Machine,
+		DiskBus:    v.Config.DiskBus,
+		VGAModel:   v.Config.VGAModel,
+		NetModel:   v.Config.NetModel,
 		OSType:     v.Config.OSType,
 		Status:     string(v.Runtime.State),
 		CPUs:       v.Config.CPUs,
@@ -163,6 +178,11 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 		req.DiskSize = strings.TrimSpace(r.FormValue("disk_size"))
 		req.ISO = strings.TrimSpace(r.FormValue("iso"))
 		req.Firmware = strings.TrimSpace(r.FormValue("firmware"))
+		req.Arch = strings.TrimSpace(r.FormValue("arch"))
+		req.Machine = strings.TrimSpace(r.FormValue("machine"))
+		req.DiskBus = strings.TrimSpace(r.FormValue("disk_bus"))
+		req.VGAModel = strings.TrimSpace(r.FormValue("vga_model"))
+		req.NetModel = strings.TrimSpace(r.FormValue("net_model"))
 		if p, err := strconv.Atoi(r.FormValue("ssh_port")); err == nil && p > 0 {
 			req.Network.SSHPort = p
 		}
@@ -228,6 +248,11 @@ func (s *Server) handleAPIVMCreate(w http.ResponseWriter, r *http.Request) {
 	cfg := vm.VMConfig{
 		ID:         req.ID,
 		Name:       req.Name,
+		Arch:       req.Arch,
+		Machine:    req.Machine,
+		DiskBus:    req.DiskBus,
+		VGAModel:   req.VGAModel,
+		NetModel:   req.NetModel,
 		OSType:     req.OSType,
 		CPUs:       req.CPUs,
 		MemoryMB:   req.MemoryMB,
@@ -392,7 +417,9 @@ func (s *Server) handleAPIVMStart(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if strings.Contains(err.Error(), "QEMU launcher is not configured") ||
-			strings.Contains(err.Error(), "qemu-system-x86_64 not found") {
+			strings.Contains(err.Error(), "qemu-system-x86_64 not found") ||
+			strings.Contains(err.Error(), "qemu-system-i386 not found") ||
+			strings.Contains(err.Error(), "no suitable QEMU binary found") {
 			WriteJSONError(w, http.StatusServiceUnavailable, ErrCodeKVMUnavailable, err.Error())
 			return
 		}
@@ -1128,6 +1155,21 @@ func (s *Server) handleAPIVMUpdateConfig(w http.ResponseWriter, r *http.Request)
 		}
 		if fw := r.FormValue("firmware"); fw != "" {
 			update.Firmware = fw
+		}
+		if arch := r.FormValue("arch"); arch != "" {
+			update.Arch = arch
+		}
+		if diskBus := r.FormValue("disk_bus"); diskBus != "" {
+			update.DiskBus = diskBus
+		}
+		if vga := r.FormValue("vga_model"); vga != "" {
+			update.VGAModel = vga
+		}
+		if netModel := r.FormValue("net_model"); netModel != "" {
+			update.NetModel = netModel
+		}
+		if mach := r.FormValue("machine"); mach != "" {
+			update.Machine = mach
 		}
 		if osType := r.FormValue("os_type"); osType != "" {
 			update.OSType = osType

@@ -70,6 +70,11 @@ type NetworkConfig struct {
 type VMConfig struct {
 	ID         string        `json:"id"`
 	Name       string        `json:"name"`
+	Arch       string        `json:"arch,omitempty"`       // "x86_64" (default) or "x86" / "i386"
+	Machine    string        `json:"machine,omitempty"`    // "q35" (default 64-bit) or "pc" (default 32-bit)
+	DiskBus    string        `json:"disk_bus,omitempty"`   // "virtio" (default 64-bit), "ide" (default 32-bit), "sata"
+	VGAModel   string        `json:"vga_model,omitempty"`  // "virtio" (default 64-bit), "std" (default 32-bit), "qxl", "cirrus"
+	NetModel   string        `json:"net_model,omitempty"`  // "virtio-net-pci" (default 64-bit), "e1000" (default 32-bit), "rtl8139"
 	CPUs       int           `json:"cpus"`
 	MemoryMB   int           `json:"memory_mb"`
 	Disk       string        `json:"disk"`
@@ -100,6 +105,15 @@ func (c *VMConfig) Validate() error {
 		return ErrInvalidVMName
 	}
 
+	if c.Arch == "" {
+		c.Arch = "x86_64"
+	} else {
+		c.Arch = strings.ToLower(strings.TrimSpace(c.Arch))
+		if c.Arch != "x86_64" && c.Arch != "x86" && c.Arch != "i386" && c.Arch != "x86_32" {
+			return errors.New("invalid architecture: must be 'x86_64' or 'x86'")
+		}
+	}
+
 	if c.CPUs < 1 || c.CPUs > 256 {
 		return ErrInvalidCPUs
 	}
@@ -122,6 +136,34 @@ func (c *VMConfig) Validate() error {
 		return err
 	}
 
+	if c.DiskBus != "" {
+		c.DiskBus = strings.ToLower(strings.TrimSpace(c.DiskBus))
+		if c.DiskBus != "virtio" && c.DiskBus != "ide" && c.DiskBus != "sata" {
+			return errors.New("invalid disk bus: must be 'virtio', 'ide', or 'sata'")
+		}
+	}
+
+	if c.VGAModel != "" {
+		c.VGAModel = strings.ToLower(strings.TrimSpace(c.VGAModel))
+		if c.VGAModel != "virtio" && c.VGAModel != "std" && c.VGAModel != "qxl" && c.VGAModel != "cirrus" {
+			return errors.New("invalid vga model: must be 'virtio', 'std', 'qxl', or 'cirrus'")
+		}
+	}
+
+	if c.NetModel != "" {
+		c.NetModel = strings.ToLower(strings.TrimSpace(c.NetModel))
+		if c.NetModel != "virtio" && c.NetModel != "virtio-net-pci" && c.NetModel != "e1000" && c.NetModel != "rtl8139" {
+			return errors.New("invalid net model: must be 'virtio', 'e1000', or 'rtl8139'")
+		}
+	}
+
+	if c.Machine != "" {
+		c.Machine = strings.ToLower(strings.TrimSpace(c.Machine))
+		if c.Machine != "q35" && c.Machine != "pc" && c.Machine != "i440fx" {
+			return errors.New("invalid machine: must be 'q35' or 'pc'")
+		}
+	}
+
 	if c.DiskSize != "" {
 		if err := storage.ValidateDiskSize(c.DiskSize); err != nil {
 			return err
@@ -141,6 +183,10 @@ func (c *VMConfig) Validate() error {
 		if c.Firmware != "bios" && c.Firmware != "uefi" {
 			return errors.New("invalid firmware: must be 'bios' or 'uefi'")
 		}
+	}
+
+	if (c.Arch == "x86" || c.Arch == "i386" || c.Arch == "x86_32") && c.Firmware == "uefi" {
+		return errors.New("invalid firmware: 32-bit (x86) VMs must use 'bios' (SeaBIOS) firmware")
 	}
 
 	if c.Network.Mode == "" {
@@ -182,6 +228,11 @@ func (c *VMConfig) ToQEMUConfig() *qemu.Config {
 
 	return &qemu.Config{
 		ID:         c.ID,
+		Arch:       c.Arch,
+		Machine:    c.Machine,
+		DiskBus:    c.DiskBus,
+		VGAModel:   c.VGAModel,
+		NetModel:   c.NetModel,
 		CPUs:       c.CPUs,
 		MemoryMB:   c.MemoryMB,
 		Disk:       c.Disk,

@@ -50,6 +50,7 @@ type DashboardPageData struct {
 type VMCardView struct {
 	ID          string
 	Name        string
+	Arch        string
 	OSType      string
 	Status      string
 	StatusClass string
@@ -222,12 +223,13 @@ func toVMCardView(v *vm.VM) VMCardView {
 	if v.Runtime.State == vm.StateRunning && v.Runtime.PID > 0 {
 		rss := host.GetProcessRSSBytes(v.Runtime.PID)
 		memUsedMB = int(rss / (1024 * 1024))
-		cpuPercent = host.GetProcessCPUPercent(v.Runtime.PID)
+		cpuPercent = host.GetVMProcessCPUPercent(v.Runtime.PID, v.Config.CPUs)
 	}
 
 	return VMCardView{
 		ID:          v.Config.ID,
 		Name:        v.Config.Name,
+		Arch:        v.Config.Arch,
 		OSType:      v.Config.OSType,
 		Status:      st,
 		StatusClass: st,

@@ -258,3 +258,55 @@ func TestWizard_FormSubmission_ValidationErrors(t *testing.T) {
 		t.Errorf("expected 400 Bad Request for duplicate host port, got %d", rec.Code)
 	}
 }
+
+func TestWizard_FormSubmission_32BitVM(t *testing.T) {
+	srv := newTestServer(t)
+
+	formData := url.Values{}
+	formData.Set("name", "winxp-32bit-test")
+	formData.Set("id", "winxp-32bit-test")
+	formData.Set("arch", "x86")
+	formData.Set("os_type", "Windows XP / 7 (32-bit)")
+	formData.Set("firmware", "bios")
+	formData.Set("disk_bus", "ide")
+	formData.Set("vga_model", "std")
+	formData.Set("cpus", "2")
+	formData.Set("memory_mb", "1024")
+	formData.Set("disk_size", "10G")
+	formData.Set("disk_format", "qcow2")
+
+	req := httptest.NewRequest(http.MethodPost, "/vms", strings.NewReader(formData.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	rec := httptest.NewRecorder()
+
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 See Other redirect, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify VM config in manager
+	v, err := srv.vmMgr.GetVM("winxp-32bit-test")
+	if err != nil {
+		t.Fatalf("failed to retrieve created VM: %v", err)
+	}
+	if v.Config.Arch != "x86" {
+		t.Errorf("expected Arch 'x86', got '%s'", v.Config.Arch)
+	}
+	if v.Config.DiskBus != "ide" {
+		t.Errorf("expected DiskBus 'ide', got '%s'", v.Config.DiskBus)
+	}
+	if v.Config.VGAModel != "std" {
+		t.Errorf("expected VGAModel 'std', got '%s'", v.Config.VGAModel)
+	}
+	if v.Config.Firmware != "bios" {
+		t.Errorf("expected Firmware 'bios', got '%s'", v.Config.Firmware)
+	}
+
+	// Verify QEMU launcher resolution for 32-bit
+	bin := srv.vmMgr.Launcher().BinaryPathForArch("x86")
+	if !strings.Contains(bin, "qemu-system-i386") && !strings.Contains(bin, "qemu-system-x86_64") {
+		t.Errorf("expected valid QEMU binary path for x86, got '%s'", bin)
+	}
+}

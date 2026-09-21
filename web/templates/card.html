@@ -10,6 +10,9 @@
             {{ if ne .Name .ID }}
             <span class="vm-id-tag">{{ .ID }}</span>
             {{ end }}
+            {{ if or (eq .Arch "x86") (eq .Arch "i386") }}
+            <span class="vm-id-tag" style="background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3);">32-bit</span>
+            {{ end }}
         </div>
     </div>
 

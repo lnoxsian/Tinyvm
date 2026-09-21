@@ -94,3 +94,24 @@ func TestGetProcessCPUPercent(t *testing.T) {
 	}
 }
 
+func TestGetVMProcessCPUPercent(t *testing.T) {
+	pid := os.Getpid()
+	pct := GetVMProcessCPUPercent(pid, 1)
+	if pct < 0.0 || pct > 100.0 {
+		t.Errorf("expected VM CPU percent between 0 and 100, got %f", pct)
+	}
+
+	pct2Cores := GetVMProcessCPUPercent(pid, 2)
+	if pct2Cores < 0.0 || pct2Cores > 100.0 {
+		t.Errorf("expected VM CPU percent between 0 and 100, got %f", pct2Cores)
+	}
+
+	if GetVMProcessCPUPercent(-1, 2) != 0.0 {
+		t.Errorf("expected 0 VM CPU percent for PID -1")
+	}
+	if GetVMProcessCPUPercent(999999999, 2) != 0.0 {
+		t.Errorf("expected 0 VM CPU percent for non-existent PID")
+	}
+}
+
+

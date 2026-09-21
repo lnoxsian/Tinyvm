@@ -476,7 +476,7 @@ func (m *Manager) StatusVM(id string) (*VMStatusInfo, error) {
 		uptime = time.Since(runtime.StartedAt).Round(time.Second)
 	}
 	if runtime.State == StateRunning && runtime.PID > 0 {
-		cpuPercent = host.GetProcessCPUPercent(runtime.PID)
+		cpuPercent = host.GetVMProcessCPUPercent(runtime.PID, cfg.CPUs)
 		memRSS = host.GetProcessRSSBytes(runtime.PID)
 	}
 
@@ -728,6 +728,21 @@ func (m *Manager) UpdateVMConfig(id string, updated VMConfig) error {
 	}
 	if updated.MemoryMB >= 128 {
 		v.Config.MemoryMB = updated.MemoryMB
+	}
+	if updated.Arch != "" {
+		v.Config.Arch = updated.Arch
+	}
+	if updated.DiskBus != "" {
+		v.Config.DiskBus = updated.DiskBus
+	}
+	if updated.VGAModel != "" {
+		v.Config.VGAModel = updated.VGAModel
+	}
+	if updated.NetModel != "" {
+		v.Config.NetModel = updated.NetModel
+	}
+	if updated.Machine != "" {
+		v.Config.Machine = updated.Machine
 	}
 	if updated.Firmware != "" {
 		v.Config.Firmware = updated.Firmware

@@ -101,6 +101,9 @@ func TestGetVMMetrics(t *testing.T) {
 	if mRunning.MemoryRSSBytes == 0 {
 		t.Logf("Process memory RSS reported 0 (non-Linux or permission restricted)")
 	}
+	if mRunning.CPUPercent < 0.0 || mRunning.CPUPercent > 100.0 {
+		t.Errorf("expected CPUPercent between 0.0 and 100.0, got %f", mRunning.CPUPercent)
+	}
 
 	// 3. Non-existent VM
 	_, err = mgr.GetVMMetrics("non-existent-vm-xyz")

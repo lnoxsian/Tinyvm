@@ -83,19 +83,41 @@
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label" for="vm-os">Operating System</label>
-                        <select id="vm-os" name="os_type" class="form-control">
-                            <option value="Linux" selected>Linux (Generic)</option>
-                            <option value="Ubuntu">Ubuntu</option>
-                            <option value="Debian">Debian</option>
-                            <option value="Fedora">Fedora / RHEL</option>
-                            <option value="Alpine">Alpine Linux</option>
-                            <option value="Windows">Microsoft Windows</option>
-                            <option value="Other">Other OS</option>
+                        <label class="form-label" for="vm-arch">CPU Architecture</label>
+                        <select id="vm-arch" name="arch" class="form-control" onchange="onArchChange(this.value)">
+                            <option value="x86_64" selected>x86_64 (64-bit) &mdash; Modern 64-bit OS</option>
+                            <option value="x86">x86 / i386 (32-bit) &mdash; Legacy &amp; 32-bit OS (KVM Accelerated)</option>
                         </select>
-                        <!-- <span class="form-hint">Used for display and optimal device profile selection.</span> -->
                     </div>
 
+                    <div class="form-group">
+                        <label class="form-label" for="vm-os">Operating System</label>
+                        <select id="vm-os" name="os_type" class="form-control" onchange="onOSChange(this.value)">
+                            <optgroup label="64-Bit Operating Systems" id="optgroup-64bit">
+                                <option value="Linux" selected>Linux (Generic 64-bit)</option>
+                                <option value="Ubuntu">Ubuntu (64-bit)</option>
+                                <option value="Debian">Debian (64-bit)</option>
+                                <option value="Fedora">Fedora / RHEL (64-bit)</option>
+                                <option value="Alpine">Alpine Linux (64-bit)</option>
+                                <option value="Windows">Windows 10 / 11 / Server (64-bit)</option>
+                            </optgroup>
+                            <optgroup label="32-Bit (x86) Operating Systems" id="optgroup-32bit">
+                                <option value="Linux (32-bit)">Linux (Generic 32-bit / i686)</option>
+                                <option value="Debian (32-bit)">Debian (32-bit / i386)</option>
+                                <option value="Ubuntu (32-bit)">Ubuntu (32-bit / i386)</option>
+                                <option value="Alpine (32-bit)">Alpine Linux (32-bit / x86)</option>
+                                <option value="Windows XP / 7 (32-bit)">Windows XP / 7 / 10 (32-bit)</option>
+                                <option value="ReactOS">ReactOS (32-bit)</option>
+                                <option value="FreeDOS">FreeDOS / MS-DOS</option>
+                            </optgroup>
+                            <optgroup label="Other">
+                                <option value="Other">Other OS</option>
+                            </optgroup>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
                     <div class="form-group">
                         <label class="form-label" for="vm-iso">
                             <span>Installation Media (ISO)</span>
@@ -107,7 +129,6 @@
                             <option value="{{ . }}">{{ . }}</option>
                             {{ end }}
                         </select>
-                        <!-- <span class="form-hint">ISO will be attached as virtual CD-ROM.</span> -->
                     </div>
                 </div>
 
@@ -217,6 +238,31 @@
                     </div>
                 </div>
 
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="vm-disk-bus">Disk Controller Bus</label>
+                        <select id="vm-disk-bus" name="disk_bus" class="form-control">
+                            <option value="" selected>Auto (VirtIO for 64-bit, IDE for 32-bit)</option>
+                            <option value="ide">IDE (Standard PC &mdash; Universal 32-bit Compatibility)</option>
+                            <option value="virtio">VirtIO (High Performance &mdash; Modern 32/64-bit)</option>
+                            <option value="sata">SATA (AHCI)</option>
+                        </select>
+                        <span class="form-hint">IDE is required for Windows XP/7 (32-bit) and OS installers lacking VirtIO drivers.</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="vm-vga-model">Display Adapter (VGA)</label>
+                        <select id="vm-vga-model" name="vga_model" class="form-control">
+                            <option value="" selected>Auto (VirtIO for 64-bit, Standard VGA for 32-bit)</option>
+                            <option value="std">Standard VGA / Bochs VBE (Universal 32-bit Graphical Installer Support)</option>
+                            <option value="virtio">VirtIO GPU (High Performance Linux)</option>
+                            <option value="cirrus">Cirrus Logic (Legacy)</option>
+                            <option value="qxl">QXL (SPICE Compatible)</option>
+                        </select>
+                        <span class="form-hint">Standard VGA ensures smooth, crash-free graphical output in the noVNC console.</span>
+                    </div>
+                </div>
+
                 <hr style="border: 0; border-top: 1px solid var(--border-subtle); margin: 1.5rem 0;">
 
                 <div class="form-group">
@@ -289,6 +335,10 @@
                         <div class="review-item">
                             <span class="review-label">Identifier</span>
                             <span class="review-val" id="rev-id" style="font-family: var(--font-mono); font-size: 0.85rem;">-</span>
+                        </div>
+                        <div class="review-item">
+                            <span class="review-label">Architecture</span>
+                            <span class="review-val" id="rev-arch">-</span>
                         </div>
                         <div class="review-item">
                             <span class="review-label">Operating System</span>

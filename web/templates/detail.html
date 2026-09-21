@@ -159,6 +159,10 @@
                             <td>{{ .VM.Config.MemoryMB }} MB</td>
                         </tr>
                         <tr>
+                            <td class="property-name">Architecture</td>
+                            <td>{{ if or (eq .VM.Config.Arch "x86") (eq .VM.Config.Arch "i386") }}<span class="badge badge-subtle" style="color: #eab308; border-color: rgba(234, 179, 8, 0.4);">x86 (32-bit)</span>{{ else }}<span class="badge badge-subtle">x86_64 (64-bit)</span>{{ end }}</td>
+                        </tr>
+                        <tr>
                             <td class="property-name">Firmware</td>
                             <td style="text-transform: uppercase;">{{ .VM.Config.Firmware }}</td>
                         </tr>
@@ -362,6 +366,17 @@
                         </td>
                     </tr>
 
+                    <!-- CPU Architecture -->
+                    <tr>
+                        <td class="property-name">Architecture</td>
+                        <td style="text-align: right;">
+                            <select name="arch" class="form-control" style="width: 260px; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to change architecture"{{ end }}>
+                                <option value="x86_64" {{ if or (eq .VM.Config.Arch "x86_64") (eq .VM.Config.Arch "") }}selected{{ end }}>x86_64 (64-bit)</option>
+                                <option value="x86" {{ if or (eq .VM.Config.Arch "x86") (eq .VM.Config.Arch "i386") }}selected{{ end }}>x86 / i386 (32-bit)</option>
+                            </select>
+                        </td>
+                    </tr>
+
                     <!-- BIOS/Firmware -->
                     <tr>
                         <td class="property-name">BIOS/Firmware</td>
@@ -369,6 +384,19 @@
                             <select name="firmware" class="form-control" style="width: 260px; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to change firmware"{{ end }}>
                                 <option value="bios" {{ if eq .VM.Config.Firmware "bios" }}selected{{ end }}>SeaBIOS (Standard BIOS)</option>
                                 <option value="uefi" {{ if eq .VM.Config.Firmware "uefi" }}selected{{ end }}>OVMF (UEFI)</option>
+                            </select>
+                        </td>
+                    </tr>
+
+                    <!-- Disk Controller Bus -->
+                    <tr>
+                        <td class="property-name">Disk Controller Bus</td>
+                        <td style="text-align: right;">
+                            <select name="disk_bus" class="form-control" style="width: 260px; padding: 0.25rem 0.5rem; font-size: 0.85rem; background: var(--panel-subtle); border: 1px solid var(--border); color: var(--text); border-radius: 0;" {{ if eq .VM.Runtime.State "running" }}disabled title="Stop VM to change disk bus"{{ end }}>
+                                <option value="" {{ if eq .VM.Config.DiskBus "" }}selected{{ end }}>Auto (VirtIO for 64-bit, IDE for 32-bit)</option>
+                                <option value="ide" {{ if eq .VM.Config.DiskBus "ide" }}selected{{ end }}>IDE (Universal 32-bit Compatibility)</option>
+                                <option value="virtio" {{ if eq .VM.Config.DiskBus "virtio" }}selected{{ end }}>VirtIO (High Performance)</option>
+                                <option value="sata" {{ if eq .VM.Config.DiskBus "sata" }}selected{{ end }}>SATA (AHCI)</option>
                             </select>
                         </td>
                     </tr>

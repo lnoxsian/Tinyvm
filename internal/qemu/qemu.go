@@ -3,6 +3,7 @@ package qemu
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"tinyvm/internal/host"
@@ -10,25 +11,29 @@ import (
 
 // Launcher orchestrates QEMU process execution and configuration.
 type Launcher struct {
-	binaryPath string
-	useKVM     bool
-	kvmStatus  host.KVMStatus
-	mu         sync.RWMutex
+	binaryPathX86_64 string
+	binaryPathI386   string
+	useKVM           bool
+	kvmStatus        host.KVMStatus
+	mu               sync.RWMutex
 }
 
 // NewLauncher finds the QEMU binary and checks host KVM support.
 func NewLauncher() (*Launcher, error) {
-	bin, err := exec.LookPath("qemu-system-x86_64")
-	if err != nil {
-		return nil, fmt.Errorf("qemu-system-x86_64 not found in PATH: %w", err)
+	bin64, err64 := exec.LookPath("qemu-system-x86_64")
+	bin32, _ := exec.LookPath("qemu-system-i386")
+
+	if bin64 == "" && bin32 == "" {
+		return nil, fmt.Errorf("qemu-system-x86_64 or qemu-system-i386 not found in PATH: %w", err64)
 	}
 
 	kvmStatus := host.GetKVMStatus()
 
 	return &Launcher{
-		binaryPath: bin,
-		useKVM:     kvmStatus.Available,
-		kvmStatus:  kvmStatus,
+		binaryPathX86_64: bin64,
+		binaryPathI386:   bin32,
+		useKVM:           kvmStatus.Available,
+		kvmStatus:        kvmStatus,
 	}, nil
 }
 
@@ -39,11 +44,32 @@ func (l *Launcher) KVMStatus() host.KVMStatus {
 	return l.kvmStatus
 }
 
-// BinaryPath returns the path to the discovered qemu-system-x86_64 executable.
+// BinaryPath returns the path to the discovered default QEMU executable.
 func (l *Launcher) BinaryPath() string {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
-	return l.binaryPath
+	if l.binaryPathX86_64 != "" {
+		return l.binaryPathX86_64
+	}
+	return l.binaryPathI386
+}
+
+// BinaryPathForArch returns the appropriate QEMU binary path for the requested architecture.
+func (l *Launcher) BinaryPathForArch(arch string) string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	arch = strings.ToLower(strings.TrimSpace(arch))
+	if arch == "x86" || arch == "i386" || arch == "x86_32" {
+		if l.binaryPathI386 != "" {
+			return l.binaryPathI386
+		}
+		// Fallback to x86_64 (which executes 32-bit guests natively under KVM)
+		return l.binaryPathX86_64
+	}
+	if l.binaryPathX86_64 != "" {
+		return l.binaryPathX86_64
+	}
+	return l.binaryPathI386
 }
 
 // UseKVM returns true if KVM hardware acceleration is available and enabled.
@@ -65,5 +91,10 @@ func (l *Launcher) Launch(cfg *Config, vmDir string, isoDir string) (*Process, e
 	paths := BuildPaths(vmDir, isoDir, cfg)
 	args := BuildArgs(cfg, paths, l.UseKVM())
 
-	return StartProcess(l.BinaryPath(), args, paths, cfg.ID)
+	bin := l.BinaryPathForArch(cfg.Arch)
+	if bin == "" {
+		return nil, fmt.Errorf("no suitable QEMU binary found for architecture '%s'", cfg.Arch)
+	}
+
+	return StartProcess(bin, args, paths, cfg.ID)
 }

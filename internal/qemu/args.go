@@ -27,6 +27,11 @@ type NetworkConfig struct {
 // Config specifies the runtime arguments required for a QEMU instance.
 type Config struct {
 	ID         string        `json:"id"`
+	Arch       string        `json:"arch,omitempty"`      // "x86_64" (default) or "x86" / "i386"
+	Machine    string        `json:"machine,omitempty"`   // "q35" (default 64-bit) or "pc" (default 32-bit / legacy)
+	DiskBus    string        `json:"disk_bus,omitempty"`  // "virtio" (default 64-bit), "ide" (default 32-bit), "sata"
+	VGAModel   string        `json:"vga_model,omitempty"` // "virtio" (default 64-bit), "std" (default 32-bit), "qxl", "cirrus"
+	NetModel   string        `json:"net_model,omitempty"` // "virtio-net-pci" (default 64-bit), "e1000" (default 32-bit), "rtl8139"
 	CPUs       int           `json:"cpus"`
 	MemoryMB   int           `json:"memory_mb"`
 	Disk       string        `json:"disk"`
@@ -79,17 +84,35 @@ func BuildPaths(vmDir string, isoDir string, cfg *Config) QEMUPaths {
 func BuildArgs(cfg *Config, paths QEMUPaths, useKVM bool) []string {
 	var args []string
 
+	arch := strings.ToLower(strings.TrimSpace(cfg.Arch))
+	is32Bit := (arch == "x86" || arch == "i386" || arch == "x86_32")
+
 	// 1. Machine & Acceleration
+	machineType := strings.ToLower(strings.TrimSpace(cfg.Machine))
+	if machineType == "" {
+		if is32Bit {
+			machineType = "pc" // i440fx: standard PC chipset for legacy & 32-bit OS compatibility
+		} else {
+			machineType = "q35" // PCIe ICH9 chipset for modern 64-bit OS
+		}
+	} else if machineType == "i440fx" {
+		machineType = "pc"
+	}
+
 	if useKVM {
 		args = append(args,
 			"-enable-kvm",
-			"-machine", "q35,accel=kvm",
+			"-machine", fmt.Sprintf("%s,accel=kvm", machineType),
 			"-cpu", "host",
 		)
 	} else {
+		cpuModel := "qemu64"
+		if is32Bit {
+			cpuModel = "qemu32"
+		}
 		args = append(args,
-			"-machine", "q35",
-			"-cpu", "qemu64",
+			"-machine", machineType,
+			"-cpu", cpuModel,
 		)
 	}
 
@@ -119,17 +142,25 @@ func BuildArgs(cfg *Config, paths QEMUPaths, useKVM bool) []string {
 		"-m", strconv.Itoa(cfg.MemoryMB),
 	)
 
-	// 3. Virtual Disk
+	// 4. Virtual Disk
 	if paths.DiskPath != "" {
 		format := cfg.DiskFormat
 		if format == "" {
 			format = "qcow2"
 		}
-		driveOpt := fmt.Sprintf("file=%s,format=%s,if=virtio", paths.DiskPath, strings.ToLower(format))
+		bus := strings.ToLower(strings.TrimSpace(cfg.DiskBus))
+		if bus == "" {
+			if is32Bit {
+				bus = "ide" // Native IDE controller allows 32-bit installers to detect drive without extra drivers
+			} else {
+				bus = "virtio"
+			}
+		}
+		driveOpt := fmt.Sprintf("file=%s,format=%s,if=%s", paths.DiskPath, strings.ToLower(format), bus)
 		args = append(args, "-drive", driveOpt)
 	}
 
-	// 4. ISO / CD-ROM & Boot Order
+	// 5. ISO / CD-ROM & Boot Order
 	if paths.ISOPath != "" {
 		isoDrive := fmt.Sprintf("file=%s,media=cdrom,id=cdrom0", paths.ISOPath)
 		args = append(args, "-drive", isoDrive)
@@ -148,9 +179,19 @@ func BuildArgs(cfg *Config, paths QEMUPaths, useKVM bool) []string {
 		args = append(args, "-boot", "order=c")
 	}
 
-	// 5. User-mode Networking & Port Forwarding
+	// 6. User-mode Networking & Port Forwarding
 	if cfg.Network.Enabled {
-		args = append(args, "-device", "virtio-net-pci,netdev=net0")
+		netModel := strings.ToLower(strings.TrimSpace(cfg.NetModel))
+		if netModel == "" {
+			if is32Bit {
+				netModel = "e1000" // Intel e1000 has universal in-tree drivers across 32-bit OSes
+			} else {
+				netModel = "virtio-net-pci"
+			}
+		} else if netModel == "virtio" {
+			netModel = "virtio-net-pci"
+		}
+		args = append(args, "-device", fmt.Sprintf("%s,netdev=net0", netModel))
 
 		netdevParts := []string{"user", "id=net0"}
 		if cfg.Network.SSHPort > 0 {
@@ -166,23 +207,33 @@ func BuildArgs(cfg *Config, paths QEMUPaths, useKVM bool) []string {
 		args = append(args, "-netdev", strings.Join(netdevParts, ","))
 	}
 
-	// 6. QMP Management Socket
+	// 7. QMP Management Socket
 	args = append(args, "-qmp", fmt.Sprintf("unix:%s,server=on,wait=off", paths.QMPSock))
 
-	// 7. Serial Console Socket
+	// 8. Serial Console Socket
 	args = append(args, "-serial", fmt.Sprintf("unix:%s,server=on,wait=off", paths.ConsoleSock))
 
-	// 8. Graphical Display / VNC Socket
+	// 9. Graphical Display / VNC Socket & Tablet
 	if paths.VNCSock != "" {
+		vga := strings.ToLower(strings.TrimSpace(cfg.VGAModel))
+		if vga == "" {
+			if is32Bit {
+				vga = "std" // Standard VGA / Bochs VBE works across all 32-bit graphical OS installers
+			} else {
+				vga = "virtio"
+			}
+		}
 		args = append(args,
-			"-vga", "virtio",
+			"-vga", vga,
 			"-vnc", fmt.Sprintf("unix:%s", paths.VNCSock),
 		)
+		// Enable USB bus and tablet for seamless, drift-free mouse tracking in web console
+		args = append(args, "-usb", "-device", "usb-tablet")
 	} else {
 		args = append(args, "-display", "none")
 	}
 
-	// 9. PID File
+	// 10. PID File
 	args = append(args, "-pidfile", paths.PIDFile)
 
 	return args

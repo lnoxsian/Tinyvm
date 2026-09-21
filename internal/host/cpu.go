@@ -141,6 +141,7 @@ func GetCPUInfo() CPUInfo {
 type procSample struct {
 	ticks     uint64
 	timestamp time.Time
+	lastPct   float64
 }
 
 var (
@@ -198,23 +199,28 @@ func GetProcessCPUPercent(pid int) float64 {
 	}
 
 	prev, exists := procCPUSamples[pid]
-	procCPUSamples[pid] = procSample{
-		ticks:     totalTicks,
-		timestamp: now,
-	}
 
 	if exists && totalTicks >= prev.ticks {
 		elapsedSecs := now.Sub(prev.timestamp).Seconds()
-		if elapsedSecs >= 0.05 {
-			deltaTicks := totalTicks - prev.ticks
-			pct := (float64(deltaTicks) / elapsedSecs)
-			if pct < 0 {
-				pct = 0
-			}
-			return math.Round(pct*10) / 10
+		if elapsedSecs < 0.05 {
+			// Sub-50ms query interval: avoid noise / division by small delta, return last calculated percentage
+			return prev.lastPct
 		}
+		deltaTicks := totalTicks - prev.ticks
+		pct := (float64(deltaTicks) / elapsedSecs)
+		if pct < 0 {
+			pct = 0
+		}
+		pct = math.Round(pct*10) / 10
+		procCPUSamples[pid] = procSample{
+			ticks:     totalTicks,
+			timestamp: now,
+			lastPct:   pct,
+		}
+		return pct
 	}
 
+	firstPct := 0.0
 	// First sample: try to estimate using starttime and /proc/uptime
 	if len(fields) > 19 {
 		if starttimeTicks, err := strconv.ParseUint(string(fields[19]), 10, 64); err == nil {
@@ -230,7 +236,7 @@ func GetProcessCPUPercent(pid int) float64 {
 								if pct < 0 {
 									pct = 0
 								}
-								return math.Round(pct*10) / 10
+								firstPct = math.Round(pct*10) / 10
 							}
 						}
 					}
@@ -239,6 +245,31 @@ func GetProcessCPUPercent(pid int) float64 {
 		}
 	}
 
-	return 0.0
+	procCPUSamples[pid] = procSample{
+		ticks:     totalTicks,
+		timestamp: now,
+		lastPct:   firstPct,
+	}
+	return firstPct
+}
+
+// GetVMProcessCPUPercent returns the CPU usage percentage of a VM process normalized to its allocated vCPUs,
+// capped strictly between 0.0% and 100.0%.
+func GetVMProcessCPUPercent(pid int, vCPUs int) float64 {
+	if pid <= 0 {
+		return 0.0
+	}
+	if vCPUs <= 0 {
+		vCPUs = 1
+	}
+	rawPct := GetProcessCPUPercent(pid)
+	vmPct := rawPct / float64(vCPUs)
+	if vmPct < 0.0 {
+		vmPct = 0.0
+	}
+	if vmPct > 100.0 {
+		vmPct = 100.0
+	}
+	return math.Round(vmPct*10) / 10
 }
 

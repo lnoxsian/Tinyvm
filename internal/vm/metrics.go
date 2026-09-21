@@ -131,7 +131,7 @@ func (m *Manager) collectVMMetrics(cfg VMConfig, runtime VMRuntime) *VMMetrics {
 	}
 
 	if runtime.State == StateRunning && runtime.PID > 0 {
-		metrics.CPUPercent = host.GetProcessCPUPercent(runtime.PID)
+		metrics.CPUPercent = host.GetVMProcessCPUPercent(runtime.PID, cfg.CPUs)
 		metrics.MemoryRSSBytes = host.GetProcessRSSBytes(runtime.PID)
 		metrics.MemoryRSSMB = math.Round((float64(metrics.MemoryRSSBytes)/(1024*1024))*10) / 10
 	}

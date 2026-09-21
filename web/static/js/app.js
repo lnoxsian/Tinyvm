@@ -715,6 +715,49 @@ function toggleNetworkFields(checked) {
     }
 }
 
+function onArchChange(arch) {
+    const uefiRadio = document.querySelector('input[name="firmware"][value="uefi"]');
+    const biosRadio = document.querySelector('input[name="firmware"][value="bios"]');
+    const uefiCard = document.getElementById('firmware-card-uefi');
+
+    if (arch === 'x86' || arch === 'i386') {
+        if (biosRadio) biosRadio.checked = true;
+        if (uefiRadio) {
+            uefiRadio.disabled = true;
+            if (uefiCard) {
+                uefiCard.classList.add('disabled');
+                uefiCard.style.opacity = '0.5';
+                uefiCard.style.cursor = 'not-allowed';
+                uefiCard.title = '32-bit (x86) requires SeaBIOS';
+            }
+        }
+    } else {
+        if (uefiRadio && !uefiRadio.hasAttribute("data-host-missing")) {
+            uefiRadio.disabled = false;
+            if (uefiCard) {
+                uefiCard.classList.remove('disabled');
+                uefiCard.style.opacity = '1';
+                uefiCard.style.cursor = 'pointer';
+                uefiCard.title = '';
+            }
+        }
+    }
+    updateFirmwareCards();
+}
+
+function onOSChange(osVal) {
+    const archSelect = document.getElementById("vm-arch");
+    if (!archSelect) return;
+    const is32 = osVal.includes("32-bit") || osVal.includes("ReactOS") || osVal.includes("FreeDOS");
+    if (is32) {
+        archSelect.value = "x86";
+        onArchChange("x86");
+    } else if (osVal !== "Other") {
+        archSelect.value = "x86_64";
+        onArchChange("x86_64");
+    }
+}
+
 function updateFirmwareCards() {
     const biosCard = document.getElementById("firmware-card-bios");
     const uefiCard = document.getElementById("firmware-card-uefi");
@@ -728,6 +771,8 @@ function updateFirmwareCards() {
 function populateReviewCard() {
     const name = document.getElementById("vm-name")?.value.trim() || "-";
     const id = document.getElementById("vm-id")?.value.trim() || name;
+    const arch = document.getElementById("vm-arch")?.value || "x86_64";
+    const archLabel = (arch === "x86" || arch === "i386") ? "x86 (32-bit)" : "x86_64 (64-bit)";
     const os = document.getElementById("vm-os")?.value || "Linux";
     const isoSelect = document.getElementById("vm-iso");
     const iso = (isoSelect && isoSelect.value) ? isoSelect.value : "None (No media attached)";
@@ -746,6 +791,9 @@ function populateReviewCard() {
 
     document.getElementById("rev-name").textContent = name;
     document.getElementById("rev-id").textContent = id;
+    if (document.getElementById("rev-arch")) {
+        document.getElementById("rev-arch").textContent = archLabel;
+    }
     document.getElementById("rev-os").textContent = os;
     document.getElementById("rev-firmware").textContent = firmware.toUpperCase();
     document.getElementById("rev-iso").textContent = iso;
@@ -807,7 +855,10 @@ function renderVMTelemetryCharts(pushPoint = true) {
         const vmHist = window.vmTelemetryHistory[vmId];
 
         const isRunning = status === "running";
-        const sampleVal = (isRunning || metric === "storage") ? val : 0;
+        let sampleVal = (isRunning || metric === "storage") ? val : 0;
+        if (metric === "cpu" || metric === "ram" || metric === "storage") {
+            sampleVal = Math.max(0, Math.min(100, sampleVal));
+        }
 
         if (!vmHist[metric]) {
             vmHist[metric] = [sampleVal];

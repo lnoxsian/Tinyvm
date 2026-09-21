@@ -3,6 +3,8 @@ package qemu
 import (
 	"strings"
 	"testing"
+
+	"tinyvm/internal/host"
 )
 
 func findArg(args []string, flag string) (string, bool) {
@@ -155,6 +157,11 @@ func TestBuildArgs_WithISO(t *testing.T) {
 }
 
 func TestBuildArgs_WithUEFI(t *testing.T) {
+	fw := host.DetectUEFIFirmware()
+	if !fw.Available {
+		t.Skip("host does not have OVMF UEFI firmware installed, skipping test")
+	}
+
 	cfg := &Config{
 		ID:       "uefi-vm",
 		CPUs:     2,
@@ -202,5 +209,123 @@ func TestBuildArgs_WithBIOS(t *testing.T) {
 		if arg == "-drive" && i+1 < len(args) && strings.Contains(args[i+1], "pflash") {
 			t.Errorf("unexpected pflash drive for BIOS VM")
 		}
+	}
+}
+
+func TestBuildArgs_32Bit_WithKVM(t *testing.T) {
+	cfg := &Config{
+		ID:         "winxp-32bit",
+		Arch:       "x86",
+		CPUs:       2,
+		MemoryMB:   2048,
+		Disk:       "disk.qcow2",
+		DiskFormat: "qcow2",
+		Network: NetworkConfig{
+			Enabled: true,
+			SSHPort: 2222,
+		},
+	}
+
+	paths := BuildPaths("/tmp/vms/winxp-32bit", "/tmp/iso", cfg)
+	args := BuildArgs(cfg, paths, true)
+
+	if !containsFlag(args, "-enable-kvm") {
+		t.Errorf("expected -enable-kvm for 32-bit VM with KVM")
+	}
+
+	mach, ok := findArg(args, "-machine")
+	if !ok || mach != "pc,accel=kvm" {
+		t.Errorf("expected -machine pc,accel=kvm for 32-bit VM, got %s", mach)
+	}
+
+	cpu, ok := findArg(args, "-cpu")
+	if !ok || cpu != "host" {
+		t.Errorf("expected -cpu host for 32-bit KVM VM, got %s", cpu)
+	}
+
+	drive, ok := findArg(args, "-drive")
+	if !ok || !strings.Contains(drive, "if=ide") {
+		t.Errorf("expected if=ide disk drive for 32-bit OS compatibility, got %s", drive)
+	}
+
+	vga, ok := findArg(args, "-vga")
+	if !ok || vga != "std" {
+		t.Errorf("expected -vga std for 32-bit graphical installer compatibility, got %s", vga)
+	}
+
+	if !containsFlag(args, "-usb") {
+		t.Errorf("expected -usb flag for tablet support")
+	}
+
+	// Verify netdev and e1000 device
+	foundE1000 := false
+	for i, arg := range args {
+		if arg == "-device" && i+1 < len(args) && strings.HasPrefix(args[i+1], "e1000") {
+			foundE1000 = true
+			break
+		}
+	}
+	if !foundE1000 {
+		t.Errorf("expected -device e1000 for 32-bit VM, args: %v", args)
+	}
+}
+
+func TestBuildArgs_32Bit_WithoutKVM(t *testing.T) {
+	cfg := &Config{
+		ID:       "x86-emulated",
+		Arch:     "i386",
+		CPUs:     1,
+		MemoryMB: 1024,
+	}
+
+	paths := BuildPaths("/tmp/vms/x86-emulated", "/tmp/iso", cfg)
+	args := BuildArgs(cfg, paths, false)
+
+	if containsFlag(args, "-enable-kvm") {
+		t.Errorf("did not expect -enable-kvm when KVM is disabled")
+	}
+
+	mach, _ := findArg(args, "-machine")
+	if mach != "pc" {
+		t.Errorf("expected -machine pc, got %s", mach)
+	}
+
+	cpu, _ := findArg(args, "-cpu")
+	if cpu != "qemu32" {
+		t.Errorf("expected -cpu qemu32 for emulated 32-bit VM, got %s", cpu)
+	}
+}
+
+func TestBuildArgs_32Bit_CustomOverrides(t *testing.T) {
+	cfg := &Config{
+		ID:         "debian-i386-virtio",
+		Arch:       "x86",
+		Machine:    "q35",
+		Disk:       "disk.qcow2",
+		DiskFormat: "qcow2",
+		DiskBus:    "virtio",
+		VGAModel:   "virtio",
+		NetModel:   "virtio-net-pci",
+		Network: NetworkConfig{
+			Enabled: true,
+		},
+	}
+
+	paths := BuildPaths("/tmp/vms/debian-i386-virtio", "/tmp/iso", cfg)
+	args := BuildArgs(cfg, paths, true)
+
+	mach, _ := findArg(args, "-machine")
+	if mach != "q35,accel=kvm" {
+		t.Errorf("expected overridden -machine q35,accel=kvm, got %s", mach)
+	}
+
+	drive, _ := findArg(args, "-drive")
+	if !strings.Contains(drive, "if=virtio") {
+		t.Errorf("expected overridden if=virtio, got %s", drive)
+	}
+
+	vga, _ := findArg(args, "-vga")
+	if vga != "virtio" {
+		t.Errorf("expected overridden -vga virtio, got %s", vga)
 	}
 }
