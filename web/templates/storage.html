@@ -5,20 +5,108 @@
     <h1 class="content-title">Storage Pools</h1>
 </div>
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <span class="stat-label">Storage Root</span>
-        <div class="stat-value" style="font-size: 1.25rem; font-family: monospace;">{{ .DataDir }}</div>
-        <div class="stat-meta">Primary VM &amp; ISO data directory</div>
-    </div>
-    <div class="stat-card">
-        <span class="stat-label">ISO Directory</span>
-        <div class="stat-value" style="font-size: 1.25rem; font-family: monospace;">{{ .ISODir }}</div>
-        <div class="stat-meta" id="iso-stat-count">{{ len .ISOs }} ISO images discovered</div>
+<div class="card overview-card" style="margin-bottom: 2rem;">
+    <div class="overview-list">
+        <div class="overview-row">
+            <span class="overview-label">Storage Root</span>
+            <div class="overview-details">
+                <span style="font-family: var(--font-mono); font-size: 0.85rem; word-break: break-all;">{{ .DataDir }}</span>
+                <span class="overview-sep">&bull;</span>
+                <span style="color: var(--text-muted); font-size: 0.85rem;">Primary VM &amp; ISO data directory</span>
+            </div>
+        </div>
+
+        <div class="overview-row">
+            <span class="overview-label">Pool Usage</span>
+            <div class="overview-bar">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill {{ progressClass .DiskPercent }}" style="width: {{ .DiskPercent }}%;"></div>
+                </div>
+            </div>
+            <span class="overview-value">{{ formatFloat .DiskUsedGB }} / {{ formatFloat .DiskTotalGB }} GB ({{ .DiskPercent }}%)</span>
+        </div>
+
+        <div class="overview-row">
+            <span class="overview-label">ISO Images</span>
+            <div class="overview-details">
+                <span style="font-family: var(--font-mono); font-size: 0.85rem; word-break: break-all;">{{ .ISODir }}</span>
+                <span class="overview-sep">&bull;</span>
+                <span id="iso-stat-count"><strong>{{ len .ISOs }}</strong> image{{ if ne (len .ISOs) 1 }}s{{ end }}</span>
+                <span class="overview-sep">&bull;</span>
+                <span><strong>{{ .TotalISOSizeFormatted }}</strong> total</span>
+            </div>
+        </div>
+
+        <div class="overview-row">
+            <span class="overview-label">Virtual Disks</span>
+            <div class="overview-details">
+                <span style="font-family: var(--font-mono); font-size: 0.85rem; word-break: break-all;">{{ .VMsDir }}</span>
+                <span class="overview-sep">&bull;</span>
+                <span><strong>{{ len .Disks }}</strong> disk image{{ if ne (len .Disks) 1 }}s{{ end }}{{ if .Disks }} ({{ .QCOWCount }} QCOW2, {{ .RawCount }} RAW){{ end }}</span>
+                <span class="overview-sep">&bull;</span>
+                <span><strong>{{ .TotalDiskActualFormatted }}</strong> used ({{ .TotalDiskVirtualFormatted }} provisioned)</span>
+            </div>
+        </div>
     </div>
 </div>
 
-<div class="content-header" style="margin-top: 2rem;">
+<div class="content-header">
+    <h2 class="content-title" style="font-size: 1.1rem;">Virtual Disks (QCOW2 &amp; RAW)</h2>
+</div>
+
+{{ if .Disks }}
+<div class="card" style="padding: 0; overflow: hidden; margin-bottom: 2rem;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+        <thead>
+            <tr style="border-bottom: 1px solid var(--border); background-color: rgba(255, 255, 255, 0.02);">
+                <th style="padding: 0.75rem 1rem;">Disk File</th>
+                <th style="padding: 0.75rem 1rem;">Attached VM</th>
+                <th style="padding: 0.75rem 1rem;">Format</th>
+                <th style="padding: 0.75rem 1rem;">Virtual Size</th>
+                <th style="padding: 0.75rem 1rem;">Host Usage</th>
+                <th style="padding: 0.75rem 1rem;">Path</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .Disks }}
+            <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 0.75rem 1rem; font-weight: 500;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                            <line x1="6" y1="6" x2="6.01" y2="6"/>
+                            <line x1="6" y1="18" x2="6.01" y2="18"/>
+                        </svg>
+                        <span>{{ .Filename }}</span>
+                    </div>
+                </td>
+                <td style="padding: 0.75rem 1rem;">
+                    {{ if .VMID }}
+                        <a href="/vms/{{ .VMID }}" style="color: var(--accent); text-decoration: none; font-weight: 500;">{{ if .VMName }}{{ .VMName }} ({{ .VMID }}){{ else }}{{ .VMID }}{{ end }}</a>
+                    {{ else }}
+                        <span style="color: var(--text-muted);">Unattached</span>
+                    {{ end }}
+                </td>
+                <td style="padding: 0.75rem 1rem;">
+                    <span class="badge badge-subtle" style="text-transform: uppercase; font-size: 0.75rem;">{{ .Format }}</span>
+                </td>
+                <td style="padding: 0.75rem 1rem; font-family: var(--font-mono); font-size: 0.85rem;">{{ .VirtualSizeFormatted }}</td>
+                <td style="padding: 0.75rem 1rem; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">{{ .ActualSizeFormatted }}</td>
+                <td style="padding: 0.75rem 1rem; color: var(--text-muted); font-family: monospace; font-size: 0.8rem;">{{ .Path }}</td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+</div>
+{{ else }}
+<div class="empty-state card" style="margin-bottom: 2rem;">
+    <h3>No Virtual Disks Found</h3>
+    <p style="color: var(--text-muted);">Virtual machine disks (.qcow2 and .raw) will appear here once VMs are created.</p>
+</div>
+{{ end }}
+
+<div class="content-header">
     <h2 class="content-title" style="font-size: 1.1rem;">Discovered ISO Images</h2>
 </div>
 
@@ -68,39 +156,175 @@
 </div>
 {{ end }}
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
-    <div class="card">
-        <div class="card-header" style="margin-bottom: 1rem;">
-            <h3 style="font-size: 1.05rem; margin: 0;">Download ISO from URL</h3>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0.25rem 0 0 0;">Download Linux distro or OS ISOs directly to storage (Proxmox style).</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+    <!-- Card 1: Download ISO from URL -->
+    <div class="card storage-action-card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>Download ISO from URL</span>
+            </h3>
+            <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0.25rem 0 0 0;">Download Linux or OS installation media directly to storage pool (Proxmox style).</p>
         </div>
-        <form action="/storage/download" method="POST" style="display: flex; flex-direction: column; gap: 0.75rem;">
+
+        <div id="download-error-banner" class="storage-alert-banner" style="display: none;"></div>
+
+        <form id="download-iso-form" action="/storage/download" method="POST" style="display: flex; flex-direction: column; gap: 0.85rem; flex: 1;">
             <div>
-                <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Download URL (HTTP/HTTPS)</label>
-                <input type="url" name="url" placeholder="https://example.com/distro.iso" required style="width: 100%; font-size: 0.9rem; padding: 0.5rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-main);" />
+                <label style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text); margin-bottom: 0.35rem;">Source URL (HTTP / HTTPS)</label>
+                <div class="input-with-icon-wrapper">
+                    <span class="input-icon">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                        </svg>
+                    </span>
+                    <input type="url" id="download-iso-url" name="url" placeholder="https://example.com/distro.iso" required autocomplete="off" />
+                </div>
             </div>
+
             <div>
-                <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">File Name (Optional, e.g. alpine-3.20.iso)</label>
-                <input type="text" name="name" placeholder="Leave empty to auto-detect" style="width: 100%; font-size: 0.9rem; padding: 0.5rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; color: var(--text-main);" />
+                <label style="display: block; font-size: 0.8rem; font-weight: 500; color: var(--text); margin-bottom: 0.35rem;">
+                    Target Filename <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Auto-detected from URL if empty)</span>
+                </label>
+                <div class="input-with-icon-wrapper">
+                    <span class="input-icon">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                    </span>
+                    <input type="text" id="download-iso-name" name="name" placeholder="e.g. alpine-3.20.iso" autocomplete="off" />
+                </div>
             </div>
-            <div style="display: flex; justify-content: flex-end; margin-top: 0.25rem;">
-                <button type="submit" class="btn btn-primary btn-sm">Download to Storage</button>
+
+            <!-- Download Progress State -->
+            <div id="download-progress-container" class="storage-progress-container" style="display: none; margin-top: 0.5rem;">
+                <div class="storage-progress-header">
+                    <span class="storage-progress-status">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin" style="color: var(--accent);">
+                            <line x1="12" y1="2" x2="12" y2="6"></line>
+                            <line x1="12" y1="18" x2="12" y2="22"></line>
+                            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                            <line x1="2" y1="12" x2="6" y2="12"></line>
+                            <line x1="18" y1="12" x2="22" y2="12"></line>
+                            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                        </svg>
+                        <span>Downloading image to pool...</span>
+                    </span>
+                    <span class="storage-progress-meta">Streaming</span>
+                </div>
+                <div class="progress-bar-bg" style="height: 6px; margin: 0.35rem 0;">
+                    <div class="progress-bar-fill accent" style="width: 100%; animation: pulse-dot 1.2s infinite ease-in-out;"></div>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Please keep this tab open while downloading large files.</div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: auto; padding-top: 0.5rem;">
+                <button type="submit" id="download-submit-btn" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span>Download to Storage</span>
+                </button>
             </div>
         </form>
     </div>
 
-    <div class="card">
-        <div class="card-header" style="margin-bottom: 1rem;">
-            <h3 style="font-size: 1.05rem; margin: 0;">Upload Installation ISO</h3>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0.25rem 0 0 0;">Upload an ISO file directly from your local computer into the storage pool.</p>
+    <!-- Card 2: Upload Installation ISO (Polished Dropzone) -->
+    <div class="card storage-action-card">
+        <div class="card-header">
+            <h3 class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>Upload ISO Image</span>
+            </h3>
+            <p style="color: var(--text-muted); font-size: 0.82rem; margin: 0.25rem 0 0 0;">Upload local installation image files directly into the ISO storage pool.</p>
         </div>
-        <form action="/storage/upload" method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 0.75rem;">
-            <div>
-                <label style="display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem;">Select ISO File</label>
-                <input type="file" name="file" accept=".iso" required style="font-size: 0.9rem; color: var(--text-main);" />
+
+        <div id="upload-error-banner" class="storage-alert-banner" style="display: none;"></div>
+
+        <form id="upload-iso-form" action="/storage/upload" method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 0.85rem; flex: 1;">
+            <input type="file" id="iso-file-input" name="file" accept=".iso" style="display: none;" />
+
+            <!-- Dropzone Area -->
+            <div id="iso-upload-dropzone" class="upload-dropzone">
+                <svg class="upload-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                    <path d="M12 12v9"></path>
+                    <path d="m16 16-4-4-4 4"></path>
+                </svg>
+                <div class="upload-dropzone-title">
+                    <span>Drag and drop your ISO file here, or</span>
+                    <span class="upload-browse-link">browse</span>
+                </div>
+                <div class="upload-dropzone-subtitle">Supports standard .iso format images</div>
             </div>
-            <div style="display: flex; justify-content: flex-end; margin-top: 1.75rem;">
-                <button type="submit" class="btn btn-primary btn-sm">Upload to Pool</button>
+
+            <!-- Selected File Card (Hidden initially) -->
+            <div id="iso-file-preview" class="upload-file-card" style="display: none;">
+                <div class="upload-file-meta">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent); flex-shrink: 0;">
+                        <circle cx="12" cy="12" r="10"/>
+                        <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <div style="min-width: 0;">
+                        <div id="iso-preview-name" class="upload-file-name">filename.iso</div>
+                        <div id="iso-preview-size" class="upload-file-size">0 MB</div>
+                    </div>
+                </div>
+                <button type="button" id="iso-preview-remove" class="upload-file-remove" title="Remove file">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Upload Progress Container (Hidden initially) -->
+            <div id="iso-upload-progress" class="storage-progress-container" style="display: none;">
+                <div class="storage-progress-header">
+                    <span class="storage-progress-status">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin" style="color: var(--accent);">
+                            <line x1="12" y1="2" x2="12" y2="6"></line>
+                            <line x1="12" y1="18" x2="12" y2="22"></line>
+                            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                            <line x1="2" y1="12" x2="6" y2="12"></line>
+                            <line x1="18" y1="12" x2="22" y2="12"></line>
+                            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                        </svg>
+                        <span id="iso-upload-status-text">Uploading to storage...</span>
+                    </span>
+                    <span id="iso-progress-percent" class="storage-progress-meta">0%</span>
+                </div>
+                <div class="progress-bar-bg" style="height: 6px; margin: 0.35rem 0;">
+                    <div id="iso-progress-bar" class="progress-bar-fill accent" style="width: 0%;"></div>
+                </div>
+                <div id="iso-progress-bytes" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">0 MB / 0 MB</div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: auto; padding-top: 0.5rem;">
+                <button type="submit" id="iso-upload-btn" class="btn btn-primary btn-sm" disabled style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <span>Upload to Storage</span>
+                </button>
             </div>
         </form>
     </div>

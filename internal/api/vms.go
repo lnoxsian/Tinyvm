@@ -1487,6 +1487,10 @@ func (s *Server) handleAPIVMLogs(w http.ResponseWriter, r *http.Request) {
 
 // handleAPIISODownload handles POST /api/v1/isos/download, /isos/download, and /storage/download
 func (s *Server) handleAPIISODownload(w http.ResponseWriter, r *http.Request) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Time{})
+	_ = rc.SetWriteDeadline(time.Time{})
+
 	if s.vmMgr == nil || s.vmMgr.Storage() == nil {
 		WriteJSONError(w, http.StatusInternalServerError, ErrCodeInternal, "storage unavailable")
 		return
@@ -1511,13 +1515,17 @@ func (s *Server) handleAPIISODownload(w http.ResponseWriter, r *http.Request) {
 
 	info, err := s.vmMgr.Storage().DownloadISO(urlStr, customName)
 	if err != nil {
+		if errors.Is(err, storage.ErrISOExists) {
+			WriteJSONError(w, http.StatusConflict, ErrCodeConflict, err.Error())
+			return
+		}
 		WriteJSONError(w, http.StatusBadRequest, ErrCodeInvalidInput, "failed to download ISO: "+err.Error())
 		return
 	}
 
 	s.logger.Info("Downloaded ISO image", "name", info.Name, "url", urlStr)
 
-	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+	if !strings.Contains(r.Header.Get("Content-Type"), "application/json") && !strings.Contains(r.Header.Get("Accept"), "application/json") {
 		http.Redirect(w, r, "/storage", http.StatusSeeOther)
 		return
 	}

@@ -224,3 +224,37 @@ func (s *Storage) ListVMIDs() ([]string, error) {
 
 	return vmIDs, nil
 }
+
+// FormatBytes formats a byte size into human-readable representation.
+func FormatBytes(bytes int64) string {
+	if bytes < 0 {
+		return "0 B"
+	}
+	const (
+		kb = 1024
+		mb = 1024 * kb
+		gb = 1024 * mb
+		tb = 1024 * gb
+	)
+	switch {
+	case bytes >= tb:
+		return fmt.Sprintf("%.2f TB", float64(bytes)/float64(tb))
+	case bytes >= gb:
+		f := float64(bytes) / float64(gb)
+		if f == float64(int64(f)) {
+			return fmt.Sprintf("%.0f GB", f)
+		}
+		return fmt.Sprintf("%.2f GB", f)
+	case bytes >= mb:
+		f := float64(bytes) / float64(mb)
+		if f == float64(int64(f)) {
+			return fmt.Sprintf("%.0f MB", f)
+		}
+		return fmt.Sprintf("%.1f MB", f)
+	case bytes >= kb:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+

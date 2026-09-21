@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -87,16 +88,40 @@ type SettingsPageData struct {
 // StoragePageData provides presentation data for the storage pool view.
 type StoragePageData struct {
 	BasePageData
-	DataDir string
-	ISODir  string
-	ISOs    []ISOViewModel
+	DataDir                   string
+	VMsDir                    string
+	ISODir                    string
+	ISOs                      []ISOViewModel
+	Disks                     []DiskViewModel
+	DiskUsedGB                float64
+	DiskTotalGB               float64
+	DiskPercent               int
+	TotalISOSizeFormatted     string
+	TotalDiskActualFormatted  string
+	TotalDiskVirtualFormatted string
+	QCOWCount                 int
+	RawCount                  int
 }
 
 // ISOViewModel holds formatted metadata for ISO display.
 type ISOViewModel struct {
 	Name          string
 	Path          string
+	SizeBytes     int64
 	SizeFormatted string
+}
+
+// DiskViewModel holds formatted metadata for QCOW2 and RAW disk image display.
+type DiskViewModel struct {
+	VMID                 string
+	VMName               string
+	Filename             string
+	Format               string
+	Path                 string
+	VirtualSizeBytes     int64
+	ActualSizeBytes      int64
+	VirtualSizeFormatted string
+	ActualSizeFormatted  string
 }
 
 // VMDetailPageData provides presentation data for a specific VM view.
@@ -680,20 +705,137 @@ func (s *Server) handleVMNoVNCApp(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStorage(w http.ResponseWriter, r *http.Request) {
 	var isoModels []ISOViewModel
 	var isoDir string
+	var totalISOBytes int64
 	if s.vmMgr != nil && s.vmMgr.Storage() != nil {
 		isoDir = s.vmMgr.Storage().ISODir()
 		if rawISOs, err := s.vmMgr.Storage().ListISOs(); err == nil {
 			for _, item := range rawISOs {
-				sizeStr := fmt.Sprintf("%.1f MB", float64(item.SizeBytes)/(1024*1024))
-				if item.SizeBytes >= 1024*1024*1024 {
-					sizeStr = fmt.Sprintf("%.2f GB", float64(item.SizeBytes)/(1024*1024*1024))
-				}
+				totalISOBytes += item.SizeBytes
 				isoModels = append(isoModels, ISOViewModel{
 					Name:          item.Name,
 					Path:          item.Path,
-					SizeFormatted: sizeStr,
+					SizeBytes:     item.SizeBytes,
+					SizeFormatted: storage.FormatBytes(item.SizeBytes),
 				})
 			}
+		}
+	}
+
+	var vmsDir string
+	if s.vmMgr != nil && s.vmMgr.Storage() != nil {
+		vmsDir = s.vmMgr.Storage().VMsDir()
+	} else if s.cfg != nil {
+		vmsDir = s.cfg.VMsDir()
+	}
+
+	// Discover all VM disks (qcow2, raw, img)
+	var diskModels []DiskViewModel
+	var totalDiskActualBytes, totalDiskVirtualBytes int64
+	var qcowCount, rawCount int
+
+	vmMap := make(map[string]*vm.VM)
+	if s.vmMgr != nil {
+		for _, v := range s.vmMgr.ListVMs() {
+			vmMap[v.Config.ID] = v
+		}
+	}
+
+	seenPaths := make(map[string]bool)
+
+	if vmsDir != "" {
+		if entries, err := os.ReadDir(vmsDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				vmID := entry.Name()
+				vmDir := filepath.Join(vmsDir, vmID)
+
+				vmName := vmID
+				if targetVM, ok := vmMap[vmID]; ok && targetVM.Config.Name != "" {
+					vmName = targetVM.Config.Name
+				}
+
+				files, err := os.ReadDir(vmDir)
+				if err != nil {
+					continue
+				}
+
+				for _, f := range files {
+					if f.IsDir() {
+						continue
+					}
+					fname := f.Name()
+					ext := strings.ToLower(filepath.Ext(fname))
+					isConfigDisk := false
+					if targetVM, ok := vmMap[vmID]; ok && targetVM.Config.Disk == fname {
+						isConfigDisk = true
+					}
+
+					if ext != ".qcow2" && ext != ".raw" && ext != ".img" && !isConfigDisk {
+						continue
+					}
+
+					diskPath := filepath.Join(vmDir, fname)
+					if seenPaths[diskPath] {
+						continue
+					}
+					seenPaths[diskPath] = true
+
+					var format string
+					var virtualSize, actualSize int64
+
+					info, inspectErr := storage.InspectDisk(diskPath)
+					if inspectErr == nil && info != nil {
+						format = strings.ToLower(info.Format)
+						virtualSize = info.VirtualSize
+						actualSize = info.ActualSize
+					} else {
+						if fi, statErr := f.Info(); statErr == nil {
+							actualSize = fi.Size()
+						}
+						if targetVM, ok := vmMap[vmID]; ok && targetVM.Config.DiskFormat != "" {
+							format = strings.ToLower(targetVM.Config.DiskFormat)
+						} else if ext == ".qcow2" {
+							format = "qcow2"
+						} else {
+							format = "raw"
+						}
+						virtualSize = actualSize
+					}
+
+					if format == "qcow2" {
+						qcowCount++
+					} else {
+						rawCount++
+					}
+
+					totalDiskActualBytes += actualSize
+					totalDiskVirtualBytes += virtualSize
+
+					diskModels = append(diskModels, DiskViewModel{
+						VMID:                 vmID,
+						VMName:               vmName,
+						Filename:             fname,
+						Format:               format,
+						Path:                 diskPath,
+						VirtualSizeBytes:     virtualSize,
+						ActualSizeBytes:      actualSize,
+						VirtualSizeFormatted: storage.FormatBytes(virtualSize),
+						ActualSizeFormatted:  storage.FormatBytes(actualSize),
+					})
+				}
+			}
+		}
+	}
+
+	var diskUsedGB, diskTotalGB float64
+	var diskPercent int
+	if s.cfg != nil {
+		if diskInfo, err := host.GetDiskInfo(s.cfg.DataDir); err == nil && diskInfo.TotalBytes > 0 {
+			diskUsedGB = float64(diskInfo.UsedBytes) / (1024 * 1024 * 1024)
+			diskTotalGB = float64(diskInfo.TotalBytes) / (1024 * 1024 * 1024)
+			diskPercent = int((float64(diskInfo.UsedBytes) / float64(diskInfo.TotalBytes)) * 100)
 		}
 	}
 
@@ -704,31 +846,67 @@ func (s *Server) handleStorage(w http.ResponseWriter, r *http.Request) {
 			HostOnline: true,
 			KVMEnabled: checkKVM(),
 		},
-		DataDir: s.cfg.DataDir,
-		ISODir:  isoDir,
-		ISOs:    isoModels,
+		DataDir:                   s.cfg.DataDir,
+		VMsDir:                    vmsDir,
+		ISODir:                    isoDir,
+		ISOs:                      isoModels,
+		Disks:                     diskModels,
+		DiskUsedGB:                diskUsedGB,
+		DiskTotalGB:               diskTotalGB,
+		DiskPercent:               diskPercent,
+		TotalISOSizeFormatted:     storage.FormatBytes(totalISOBytes),
+		TotalDiskActualFormatted:  storage.FormatBytes(totalDiskActualBytes),
+		TotalDiskVirtualFormatted: storage.FormatBytes(totalDiskVirtualBytes),
+		QCOWCount:                 qcowCount,
+		RawCount:                  rawCount,
 	}
 	s.render(w, "storage", data)
 }
 
 func (s *Server) handleStorageUpload(w http.ResponseWriter, r *http.Request) {
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Time{})
+	_ = rc.SetWriteDeadline(time.Time{})
+
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || strings.Contains(r.Header.Get("X-Requested-With"), "XMLHttpRequest")
+
 	if s.vmMgr == nil || s.vmMgr.Storage() == nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "Storage manager not initialized"})
+			return
+		}
 		http.Error(w, "Storage manager not initialized", http.StatusInternalServerError)
 		return
 	}
 
 	mr, err := r.MultipartReader()
 	if err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "Invalid multipart upload: " + err.Error()})
+			return
+		}
 		http.Error(w, "Invalid multipart upload: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	var savedName string
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
+			s.logger.Error("Storage upload part reading failed", "error", err)
+			if isJSON {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": "Error reading upload: " + err.Error()})
+				return
+			}
 			http.Error(w, "Error reading upload: "+err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -737,19 +915,63 @@ func (s *Server) handleStorageUpload(w http.ResponseWriter, r *http.Request) {
 			fileName := filepath.Base(part.FileName())
 			if err := storage.ValidateISOName(fileName); err != nil {
 				_ = part.Close()
+				s.logger.Warn("Storage upload invalid ISO filename", "filename", fileName, "error", err)
+				if isJSON {
+					w.Header().Set("Content-Type", "application/json; charset=utf-8")
+					w.WriteHeader(http.StatusBadRequest)
+					_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
+					return
+				}
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
-			_, err := s.vmMgr.Storage().SaveISO(fileName, part)
+			info, err := s.vmMgr.Storage().SaveISO(fileName, part)
 			_ = part.Close()
 			if err != nil {
-				http.Error(w, "Failed to save ISO: "+err.Error(), http.StatusInternalServerError)
+				s.logger.Error("Storage upload failed", "filename", fileName, "error", err)
+				status := http.StatusInternalServerError
+				if errors.Is(err, storage.ErrISOExists) {
+					status = http.StatusConflict
+				} else if errors.Is(err, storage.ErrInvalidISOName) {
+					status = http.StatusBadRequest
+				}
+
+				if isJSON {
+					w.Header().Set("Content-Type", "application/json; charset=utf-8")
+					w.WriteHeader(status)
+					_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
+					return
+				}
+				http.Error(w, "Failed to save ISO: "+err.Error(), status)
 				return
 			}
+			s.logger.Info("Uploaded ISO image successfully", "name", info.Name, "size_bytes", info.SizeBytes)
+			savedName = fileName
 			break
 		}
 		_ = part.Close()
+	}
+
+	if savedName == "" {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "No valid ISO file received"})
+			return
+		}
+		http.Error(w, "No file uploaded", http.StatusBadRequest)
+		return
+	}
+
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": "ok",
+			"name":   savedName,
+		})
+		return
 	}
 
 	http.Redirect(w, r, "/storage", http.StatusSeeOther)

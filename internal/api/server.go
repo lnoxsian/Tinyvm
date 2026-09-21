@@ -189,12 +189,13 @@ func NewServer(cfg *config.Config, logger *slog.Logger, vmMgr *vm.Manager) (*Ser
 	handler = s.PanicRecoveryMiddleware(handler)
 
 	s.httpServer = &http.Server{
-		Addr:           cfg.Addr(),
-		Handler:        handler,
-		ReadTimeout:    15 * time.Second,
-		WriteTimeout:   15 * time.Second,
-		IdleTimeout:    60 * time.Second,
-		MaxHeaderBytes: 1 << 20, // 1 MB
+		Addr:              cfg.Addr(),
+		Handler:           handler,
+		ReadHeaderTimeout: 30 * time.Second,
+		ReadTimeout:       2 * time.Hour,
+		WriteTimeout:      2 * time.Hour,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MB
 	}
 
 	return s, nil

@@ -478,6 +478,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initialize VM Creation Wizard if present
     initCreateVMWizard();
 
+    // Initialize Storage Page Actions if present
+    initStorageActions();
+
     // Helper to safely schedule telemetry rendering via requestAnimationFrame
     function scheduleTelemetryRender(pushPoint = false) {
         requestAnimationFrame(() => {
@@ -951,6 +954,323 @@ function renderVMTelemetryCharts(pushPoint = true) {
         ctx.restore();
     });
 }
+
+/* ==========================================================================
+   Storage Actions: Download ISO & Polished Upload Dropzone
+   ========================================================================== */
+
+function initStorageActions() {
+    initDownloadISOActions();
+    initUploadISOActions();
+}
+
+function initDownloadISOActions() {
+    const form = document.getElementById("download-iso-form");
+    if (!form) return;
+
+    const urlInput = document.getElementById("download-iso-url");
+    const nameInput = document.getElementById("download-iso-name");
+    const submitBtn = document.getElementById("download-submit-btn");
+    const errorBanner = document.getElementById("download-error-banner");
+    const progressContainer = document.getElementById("download-progress-container");
+
+    // Auto-detect filename from URL when typed or pasted
+    if (urlInput && nameInput) {
+        urlInput.addEventListener("input", () => {
+            const val = urlInput.value.trim();
+            if (val) {
+                try {
+                    const parsed = new URL(val);
+                    const lastPart = parsed.pathname.split("/").pop();
+                    if (lastPart && lastPart.toLowerCase().endsWith(".iso") && !nameInput.value) {
+                        nameInput.value = decodeURIComponent(lastPart);
+                    }
+                } catch (_) {
+                    // Incomplete URL
+                }
+            }
+        });
+    }
+
+    // Async download submission with live spinner
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const urlVal = (urlInput ? urlInput.value.trim() : "");
+        const nameVal = (nameInput ? nameInput.value.trim() : "");
+
+        if (!urlVal) {
+            showToast("Please enter a valid ISO download URL", "error");
+            return;
+        }
+
+        if (errorBanner) errorBanner.style.display = "none";
+        if (progressContainer) progressContainer.style.display = "block";
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
+                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                </svg>
+                <span>Downloading...</span>
+            `;
+        }
+        if (urlInput) urlInput.disabled = true;
+        if (nameInput) nameInput.disabled = true;
+
+        try {
+            const resp = await fetch("/storage/download", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify({ url: urlVal, name: nameVal })
+            });
+
+            if (resp.ok) {
+                const res = await resp.json().catch(() => ({}));
+                showToast(`ISO image '${res.name || nameVal || "image"}' downloaded successfully!`, "success");
+                setTimeout(() => {
+                    window.location.reload();
+                }, 800);
+            } else {
+                let errText = "Failed to download ISO";
+                try {
+                    const errObj = await resp.json();
+                    if (errObj.error && errObj.error.message) {
+                        errText = errObj.error.message;
+                    } else if (errObj.error) {
+                        errText = errObj.error;
+                    }
+                } catch (_) {
+                    const txt = await resp.text();
+                    if (txt) errText = txt;
+                }
+                showToast(errText, "error");
+                if (errorBanner) {
+                    errorBanner.textContent = errText;
+                    errorBanner.style.display = "flex";
+                }
+                resetDownloadForm();
+            }
+        } catch (err) {
+            const msg = err.message || "Network error occurred while requesting ISO download";
+            showToast(msg, "error");
+            if (errorBanner) {
+                errorBanner.textContent = msg;
+                errorBanner.style.display = "flex";
+            }
+            resetDownloadForm();
+        }
+
+        function resetDownloadForm() {
+            if (progressContainer) progressContainer.style.display = "none";
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    <span>Download to Storage</span>
+                `;
+            }
+            if (urlInput) urlInput.disabled = false;
+            if (nameInput) nameInput.disabled = false;
+        }
+    });
+}
+
+function initUploadISOActions() {
+    const form = document.getElementById("upload-iso-form");
+    if (!form) return;
+
+    const fileInput = document.getElementById("iso-file-input");
+    const dropzone = document.getElementById("iso-upload-dropzone");
+    const previewCard = document.getElementById("iso-file-preview");
+    const previewName = document.getElementById("iso-preview-name");
+    const previewSize = document.getElementById("iso-preview-size");
+    const removeBtn = document.getElementById("iso-preview-remove");
+    const uploadBtn = document.getElementById("iso-upload-btn");
+    const errorBanner = document.getElementById("upload-error-banner");
+    const progressContainer = document.getElementById("iso-upload-progress");
+    const progressBar = document.getElementById("iso-progress-bar");
+    const progressPercent = document.getElementById("iso-progress-percent");
+    const progressBytes = document.getElementById("iso-progress-bytes");
+    const statusText = document.getElementById("iso-upload-status-text");
+
+    let selectedFile = null;
+
+    if (!fileInput || !dropzone) return;
+
+    // Open file dialog on dropzone click
+    dropzone.addEventListener("click", () => {
+        fileInput.click();
+    });
+
+    // Drag-and-drop visual events
+    ["dragenter", "dragover"].forEach(evtName => {
+        dropzone.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add("dropzone-active");
+        });
+    });
+
+    ["dragleave", "dragend"].forEach(evtName => {
+        dropzone.addEventListener(evtName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove("dropzone-active");
+        });
+    });
+
+    dropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove("dropzone-active");
+
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleFileSelection(e.dataTransfer.files[0]);
+        }
+    });
+
+    fileInput.addEventListener("change", () => {
+        if (fileInput.files && fileInput.files.length > 0) {
+            handleFileSelection(fileInput.files[0]);
+        }
+    });
+
+    function handleFileSelection(file) {
+        if (!file.name.toLowerCase().endsWith(".iso")) {
+            showToast("Only .iso image files are supported.", "error");
+            if (errorBanner) {
+                errorBanner.textContent = "Invalid file type. Please select a file ending in .iso";
+                errorBanner.style.display = "flex";
+            }
+            return;
+        }
+
+        selectedFile = file;
+        if (errorBanner) errorBanner.style.display = "none";
+        dropzone.style.display = "none";
+        previewCard.style.display = "flex";
+        previewName.textContent = file.name;
+        previewSize.textContent = formatBytesJS(file.size);
+        uploadBtn.disabled = false;
+    }
+
+    if (removeBtn) {
+        removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            selectedFile = null;
+            fileInput.value = "";
+            previewCard.style.display = "none";
+            dropzone.style.display = "flex";
+            uploadBtn.disabled = true;
+            if (errorBanner) errorBanner.style.display = "none";
+            if (progressContainer) progressContainer.style.display = "none";
+        });
+    }
+
+    // Interactive progress upload
+    form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (!selectedFile) {
+            showToast("Please select an ISO file to upload", "error");
+            return;
+        }
+
+        if (errorBanner) errorBanner.style.display = "none";
+        if (progressContainer) progressContainer.style.display = "block";
+        uploadBtn.disabled = true;
+        if (removeBtn) removeBtn.style.display = "none";
+
+        const preventUnload = (evt) => {
+            evt.preventDefault();
+            evt.returnValue = "An upload is in progress. Are you sure you want to leave?";
+            return evt.returnValue;
+        };
+        window.addEventListener("beforeunload", preventUnload);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/storage/upload");
+        xhr.setRequestHeader("Accept", "application/json");
+
+        xhr.upload.onprogress = (evt) => {
+            if (evt.lengthComputable) {
+                const pct = Math.round((evt.loaded / evt.total) * 100);
+                if (progressBar) progressBar.style.width = pct + "%";
+                if (progressPercent) progressPercent.textContent = pct + "%";
+                if (progressBytes) progressBytes.textContent = `${formatBytesJS(evt.loaded)} / ${formatBytesJS(evt.total)}`;
+            }
+        };
+
+        xhr.onload = () => {
+            window.removeEventListener("beforeunload", preventUnload);
+            if (xhr.status >= 200 && xhr.status < 400) {
+                if (progressBar) progressBar.style.width = "100%";
+                if (progressPercent) progressPercent.textContent = "100%";
+                if (statusText) statusText.textContent = "Processing and saving to storage pool...";
+                showToast(`ISO image '${selectedFile.name}' uploaded successfully!`, "success");
+                setTimeout(() => {
+                    window.location.reload();
+                }, 800);
+            } else {
+                let errText = "Upload failed";
+                try {
+                    const parsed = JSON.parse(xhr.responseText);
+                    if (parsed.error) errText = parsed.error;
+                } catch (_) {
+                    if (xhr.responseText) errText = xhr.responseText;
+                }
+                showToast(errText, "error");
+                if (errorBanner) {
+                    errorBanner.textContent = errText;
+                    errorBanner.style.display = "flex";
+                }
+                resetUploadUI();
+            }
+        };
+
+        xhr.onerror = () => {
+            window.removeEventListener("beforeunload", preventUnload);
+            showToast("Network error during file upload", "error");
+            if (errorBanner) {
+                errorBanner.textContent = "Network error during upload. Please check your connection.";
+                errorBanner.style.display = "flex";
+            }
+            resetUploadUI();
+        };
+
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        xhr.send(formData);
+
+        function resetUploadUI() {
+            if (progressContainer) progressContainer.style.display = "none";
+            uploadBtn.disabled = false;
+            if (removeBtn) removeBtn.style.display = "flex";
+        }
+    });
+}
+
+function formatBytesJS(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
 
 
 

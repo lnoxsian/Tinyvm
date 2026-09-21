@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -295,3 +296,151 @@ func TestVMList_CreateButtonVisibility(t *testing.T) {
 		t.Errorf("expected VM name to be in list")
 	}
 }
+
+func TestStorage_PageRenderingWithDisksAndISOs(t *testing.T) {
+	srv := newTestServer(t)
+
+	// 1. Create a VM with a QCOW2 disk
+	_, err := srv.vmMgr.CreateVM(vm.VMConfig{
+		ID:         "storage-test-vm",
+		Name:       "Storage Test VM",
+		CPUs:       1,
+		MemoryMB:   512,
+		Disk:       "disk.qcow2",
+		DiskSize:   "50M",
+		DiskFormat: "qcow2",
+		Firmware:   "bios",
+	})
+	if err != nil {
+		t.Fatalf("failed to create test VM: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/storage", nil)
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on /storage, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+
+	// Verify overview card rows
+	if !strings.Contains(body, "Storage Root") {
+		t.Errorf("expected overview card to contain 'Storage Root'")
+	}
+	if !strings.Contains(body, "Pool Usage") {
+		t.Errorf("expected overview card to contain 'Pool Usage'")
+	}
+	if !strings.Contains(body, "ISO Images") {
+		t.Errorf("expected overview card to contain 'ISO Images'")
+	}
+	if !strings.Contains(body, "Virtual Disks") {
+		t.Errorf("expected overview card to contain 'Virtual Disks'")
+	}
+
+	// Verify Virtual Disks table headers and content
+	if !strings.Contains(body, "Virtual Disks (QCOW2 &amp; RAW)") {
+		t.Errorf("expected section title 'Virtual Disks (QCOW2 & RAW)'")
+	}
+	if !strings.Contains(body, "disk.qcow2") {
+		t.Errorf("expected body to contain disk filename 'disk.qcow2'")
+	}
+	if !strings.Contains(body, "Storage Test VM") {
+		t.Errorf("expected body to contain VM name 'Storage Test VM'")
+	}
+	if !strings.Contains(body, "qcow2") {
+		t.Errorf("expected body to contain format 'qcow2'")
+	}
+	if !strings.Contains(body, "50 MB") {
+		t.Errorf("expected body to contain virtual size '50 MB', got: %s", body)
+	}
+
+	// Verify Discovered ISO Images section
+	if !strings.Contains(body, "Discovered ISO Images") {
+		t.Errorf("expected section title 'Discovered ISO Images'")
+	}
+}
+
+func TestStorage_UploadAndDownloadJSON(t *testing.T) {
+	srv := newTestServer(t)
+
+	// Test 1: Uploading a valid ISO via multipart with Accept: application/json
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+	part, err := w.CreateFormFile("file", "upload-test.iso")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	_, _ = part.Write([]byte("dummy-iso-content-header"))
+	_ = w.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/storage/upload", &b)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created on json upload, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+
+	var uploadResp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&uploadResp); err != nil {
+		t.Fatalf("failed to decode upload response: %v", err)
+	}
+	if uploadResp["status"] != "ok" || uploadResp["name"] != "upload-test.iso" {
+		t.Errorf("unexpected upload response: %v", uploadResp)
+	}
+
+	// Verify the file was saved
+	if !srv.vmMgr.Storage().ISOExists("upload-test.iso") {
+		t.Errorf("expected upload-test.iso to exist in storage pool")
+	}
+
+	// Test 2: Uploading an invalid file format (non-.iso) with Accept: application/json
+	b.Reset()
+	w = multipart.NewWriter(&b)
+	part, err = w.CreateFormFile("file", "malicious.sh")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	_, _ = part.Write([]byte("#!/bin/bash\necho hello"))
+	_ = w.Close()
+
+	req = httptest.NewRequest(http.MethodPost, "/storage/upload", &b)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Accept", "application/json")
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request on invalid file extension, got %d", rec.Code)
+	}
+
+	var errResp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	// Test 3: Uploading duplicate ISO returns 409 Conflict
+	b.Reset()
+	w = multipart.NewWriter(&b)
+	part, err = w.CreateFormFile("file", "upload-test.iso")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	_, _ = part.Write([]byte("duplicate-content"))
+	_ = w.Close()
+
+	req = httptest.NewRequest(http.MethodPost, "/storage/upload", &b)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Accept", "application/json")
+	rec = httptest.NewRecorder()
+	srv.httpServer.Handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on duplicate ISO upload, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+}
+
+

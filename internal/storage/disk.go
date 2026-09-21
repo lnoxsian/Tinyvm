@@ -131,7 +131,7 @@ func InspectDisk(path string) (*DiskInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "qemu-img", "info", "--output=json", cleanPath)
+	cmd := exec.CommandContext(ctx, "qemu-img", "info", "--output=json", "-U", cleanPath)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("qemu-img info failed: %w", err)
