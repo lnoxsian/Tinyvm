@@ -511,20 +511,6 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var qemuLog string
-	if s.vmMgr.Storage() != nil {
-		if vmDir, err := s.vmMgr.Storage().VMDir(id); err == nil {
-			logPath := filepath.Join(vmDir, "logs", "qemu.log")
-			if data, err := os.ReadFile(logPath); err == nil {
-				if len(data) > 65536 {
-					qemuLog = string(data[len(data)-65536:])
-				} else {
-					qemuLog = string(data)
-				}
-			}
-		}
-	}
-
 	data := VMDetailPageData{
 		BasePageData: BasePageData{
 			ActiveNav:  "vms",
@@ -537,7 +523,6 @@ func (s *Server) handleVMDetail(w http.ResponseWriter, r *http.Request) {
 		AvailableISOs: isoNames,
 		Snapshots:     snapshots,
 		DiskInfo:      diskInfo,
-		QEMULog:       qemuLog,
 	}
 	s.render(w, "detail", data)
 }

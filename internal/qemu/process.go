@@ -69,7 +69,7 @@ func StartProcess(binary string, args []string, paths QEMUPaths, vmID string) (*
 		return nil, fmt.Errorf("failed to create logs directory: %w", err)
 	}
 
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0640)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open QEMU log file: %w", err)
 	}
@@ -87,7 +87,7 @@ func StartProcess(binary string, args []string, paths QEMUPaths, vmID string) (*
 		}
 	}
 
-	banner := fmt.Sprintf("\n================================================================================\n"+
+	banner := fmt.Sprintf("================================================================================\n"+
 		"[%s] [LAUNCH] Starting Virtual Machine: %s\n"+
 		"Binary: %s\n"+
 		"Command:\n  %s \\\n    %s\n"+

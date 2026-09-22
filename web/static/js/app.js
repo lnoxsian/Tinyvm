@@ -1323,17 +1323,12 @@ function formatBytesJS(bytes) {
 }
 
 // ==========================================
-// QEMU VM Logs Viewer, Visibility Toggle & Auto-Refresh
+// QEMU VM Logs Viewer & Visibility Toggle
 // ==========================================
-let autoRefreshLogsTimer = null;
-
 function toggleLogsVisibility(vmId, isVisible) {
     const toggle = document.getElementById('vm-logs-toggle');
     const body = document.getElementById('qemu-log-body');
     const controls = document.getElementById('logs-active-controls');
-    const badge = document.getElementById('logs-visibility-badge');
-    const chevron = document.getElementById('logs-chevron-icon');
-    const label = document.getElementById('logs-toggle-label');
 
     if (!body) return;
 
@@ -1344,17 +1339,6 @@ function toggleLogsVisibility(vmId, isVisible) {
     if (isVisible) {
         body.style.display = 'block';
         if (controls) controls.style.display = 'inline-flex';
-        if (badge) {
-            badge.textContent = 'Visible';
-            badge.className = 'badge running';
-        }
-        if (chevron) {
-            chevron.style.transform = 'rotate(180deg)';
-        }
-        if (label) {
-            label.textContent = 'Logs: On';
-            label.style.color = 'var(--text)';
-        }
         localStorage.setItem('tinyvm_logs_visible', 'true');
 
         // Fetch fresh logs and scroll to bottom
@@ -1362,26 +1346,7 @@ function toggleLogsVisibility(vmId, isVisible) {
     } else {
         body.style.display = 'none';
         if (controls) controls.style.display = 'none';
-        if (badge) {
-            badge.textContent = 'Hidden';
-            badge.className = 'badge badge-subtle';
-        }
-        if (chevron) {
-            chevron.style.transform = 'rotate(0deg)';
-        }
-        if (label) {
-            label.textContent = 'See Logs';
-            label.style.color = 'var(--text-muted)';
-        }
         localStorage.setItem('tinyvm_logs_visible', 'false');
-
-        // Stop auto-refresh if active
-        const autoRefreshCheckbox = document.getElementById('auto-refresh-logs');
-        if (autoRefreshCheckbox) autoRefreshCheckbox.checked = false;
-        if (autoRefreshLogsTimer) {
-            clearInterval(autoRefreshLogsTimer);
-            autoRefreshLogsTimer = null;
-        }
     }
 }
 
@@ -1414,6 +1379,60 @@ function initLogsToggle(vmId) {
     }
 }
 
+function copyVMLogs() {
+    const viewer = document.getElementById('qemu-log-viewer');
+    const btnText = document.getElementById('copy-logs-text');
+    if (!viewer) return;
+
+    const text = viewer.textContent || '';
+    if (!text || text.trim() === '' || text === 'No log entries recorded yet.') {
+        if (typeof showToast === 'function') {
+            showToast('No log content to copy', 'info');
+        }
+        return;
+    }
+
+    const onCopied = () => {
+        if (btnText) {
+            const original = btnText.textContent;
+            btnText.textContent = 'Copied!';
+            setTimeout(() => {
+                btnText.textContent = original;
+            }, 2000);
+        }
+        if (typeof showToast === 'function') {
+            showToast('Logs copied to clipboard', 'success');
+        }
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(onCopied).catch(() => {
+            fallbackCopyText(text, onCopied);
+        });
+    } else {
+        fallbackCopyText(text, onCopied);
+    }
+}
+
+function fallbackCopyText(text, callback) {
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (callback) callback();
+    } catch (e) {
+        console.error('Copy failed:', e);
+        if (typeof showToast === 'function') {
+            showToast('Failed to copy logs', 'error');
+        }
+    }
+}
+
 function refreshVMLogs(vmId) {
     const btn = document.getElementById('refresh-logs-btn');
     const viewer = document.getElementById('qemu-log-viewer');
@@ -1421,7 +1440,8 @@ function refreshVMLogs(vmId) {
 
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Refreshing...';
+        const span = btn.querySelector('span');
+        if (span) span.textContent = 'Refreshing...';
     }
 
     fetch(`/api/v1/vms/${encodeURIComponent(vmId)}/logs`)
@@ -1442,23 +1462,8 @@ function refreshVMLogs(vmId) {
         .finally(() => {
             if (btn) {
                 btn.disabled = false;
-                btn.textContent = 'Refresh Log';
+                const span = btn.querySelector('span');
+                if (span) span.textContent = 'Refresh';
             }
         });
-}
-
-function toggleAutoRefreshLogs(vmId, enabled) {
-    if (autoRefreshLogsTimer) {
-        clearInterval(autoRefreshLogsTimer);
-        autoRefreshLogsTimer = null;
-    }
-    if (enabled) {
-        refreshVMLogs(vmId);
-        autoRefreshLogsTimer = setInterval(() => {
-            const tabSummary = document.getElementById('tab-summary');
-            if (!tabSummary || tabSummary.classList.contains('active')) {
-                refreshVMLogs(vmId);
-            }
-        }, 3000);
-    }
 }

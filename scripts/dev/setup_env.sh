@@ -86,7 +86,7 @@ if command -v apt-get >/dev/null 2>&1; then
     run_as_root apt-get update -y
     log_info "Installing qemu-system-x86, qemu-utils, and ovmf..."
     run_as_root apt-get install -y --no-install-recommends \
-        qemu-system-x86 \
+o        qemu-system-x86 \
         qemu-utils \
         ovmf
 elif command -v dnf >/dev/null 2>&1; then
